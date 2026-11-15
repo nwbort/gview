@@ -72,15 +72,24 @@ class Sync(private val context: Context, private val store: Store, private val a
         val key = acct.apiKey ?: return Result.NotConnected
         val cache = store.cache.value
         val today = LocalDate.now()
+        // How far back to keep, as chosen in Settings.
+        val want = today.minusYears(cache.historyYears.toLong()).plusDays(1)
         // Each kind of data keeps its own high-water mark, so one that failed
-        // (or is new) catches up on the whole year next time.
+        // (or is new) catches up on everything next time.
         fun since(section: String): LocalDate = cache.covered[section]?.let { minOf(LocalDate.parse(it).minusDays(3), today.minusDays(7)) }
-            ?: today.minusDays(HISTORY_DAYS)
+            ?: want
+        // And its low-water mark: when the history setting grows, fetch just the older stretch.
+        fun earliest(section: String): LocalDate? = cache.earliest[section]?.let(LocalDate::parse)
+            ?: if (cache.covered[section] != null) today.minusDays(HISTORY_DAYS) else null
+        fun backfill(section: String): Pair<LocalDate, LocalDate>? =
+            earliest(section)?.takeIf { want < it }?.let { want to it.minusDays(1) }
+        fun <T> both(section: String, token: String, call: (String, LocalDate, LocalDate) -> List<T>): List<T> =
+            call(token, since(section), today) + (backfill(section)?.let { (a, b) -> call(token, a, b) } ?: emptyList())
         val from = since(ACTIVITIES)
 
         // Activities first: it also proves the key works.
         val activities = try {
-            withToken(key) { api.activities(it, from, today) }
+            withToken(key) { both(ACTIVITIES, it, api::activities) }
         } catch (e: GarminAuthException) {
             store.updateAccount { it.copy(token = null, tokenExpires = null, keyRejected = true) }
             val msg = "Garmin turned the key down. It may have expired or been deleted: make a new one."
@@ -100,33 +109,39 @@ class Sync(private val context: Context, private val store: Store, private val a
             errors[name] = e.message ?: e.javaClass.simpleName
             null
         }
-        val summaries = section(SUMMARY) { api.summaries(it, since(SUMMARY), today) }
-        val sleep = section(SLEEP) { api.sleep(it, since(SLEEP), today) }
-        val hrv = section(HRV) { api.hrv(it, since(HRV), today) }
+        val summaries = section(SUMMARY) { both(SUMMARY, it, api::summaries) }
+        val sleep = section(SLEEP) { both(SLEEP, it, api::sleep) }
+        val hrv = section(HRV) { both(HRV, it, api::hrv) }
         // The through-the-day curve only matters for the last few days.
         val bb = section("Body Battery") { api.bodyBattery(it, today.minusDays(BB_DAYS), today) }
-        val weight = section(WEIGHT) { api.weight(it, since(WEIGHT), today) }
+        val weight = section(WEIGHT) { both(WEIGHT, it, api::weight) }
         val fitnessAge = section("Fitness age") { api.fitnessAge(it, today) }
-        val done = mapOf(ACTIVITIES to activities, SUMMARY to summaries, SLEEP to sleep, HRV to hrv, WEIGHT to weight)
-            .filterValues { it != null }.keys.associateWith { today.toString() }
+        val synced = mapOf(ACTIVITIES to activities, SUMMARY to summaries, SLEEP to sleep, HRV to hrv, WEIGHT to weight)
+            .filterValues { it != null }.keys
+        val done = synced.associateWith { today.toString() }
+        val reached = synced.associateWith { sec -> listOfNotNull(earliest(sec), since(sec), backfill(sec)?.first).min().toString() }
 
         val known = cache.activities.mapTo(HashSet()) { it.id }
         store.updateCache { c ->
             // Activities in the synced window that Garmin no longer lists were deleted there.
             val window = from.toString()
             val kept = c.activities.filter { it.start < window }
+            // Anything older than the history setting is let go (it was made shorter).
+            val keep = want.toString()
+            fun <V> Map<String, V>.recent() = filterKeys { it >= keep }
             c.copy(
-                activities = (kept + activities).distinctBy { it.id },
-                summaries = c.summaries + summaries.orEmpty().associateBy { it.date },
-                sleep = c.sleep + sleep.orEmpty().associateBy { it.date },
-                hrv = c.hrv + hrv.orEmpty().associateBy { it.date },
+                activities = (kept + activities).distinctBy { it.id }.filter { it.start >= keep },
+                summaries = (c.summaries + summaries.orEmpty().associateBy { it.date }).recent(),
+                sleep = (c.sleep + sleep.orEmpty().associateBy { it.date }).recent(),
+                hrv = (c.hrv + hrv.orEmpty().associateBy { it.date }).recent(),
                 bodyBattery = (c.bodyBattery + bb.orEmpty().associateBy { it.date })
                     .filterKeys { it >= today.minusDays(BB_KEEP_DAYS).toString() },
-                weight = c.weight + weight.orEmpty().associateBy { it.date },
+                weight = (c.weight + weight.orEmpty().associateBy { it.date }).recent(),
                 fitnessAge = fitnessAge ?: c.fitnessAge,
                 lastSync = System.currentTimeMillis(),
                 syncedTo = today.toString(),
                 covered = c.covered + done,
+                earliest = (c.earliest + reached).mapValues { maxOf(it.value, keep) },
                 errors = errors,
             )
         }

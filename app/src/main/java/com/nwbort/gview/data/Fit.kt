@@ -151,7 +151,7 @@ object Fit {
     }
 
     /** Bump when [track] changes, so routes decoded before are decoded again. */
-    const val VERSION = 2
+    const val VERSION = 3
 
     private const val SEMI = 180.0 / 2147483648.0
 
@@ -162,7 +162,8 @@ object Fit {
     fun track(records: List<Record>, sport: Sport): Track {
         if (records.isEmpty()) return Track(v = VERSION)
         val t0 = records.first().time
-        val pos = records.filter { it.lat != null && it.lon != null && abs(it.lat!!) <= 90 && !(it.lat == 0.0 && it.lon == 0.0) }
+        fun valid(r: Record) = r.lat != null && r.lon != null && abs(r.lat) <= 90 && !(r.lat == 0.0 && r.lon == 0.0)
+        val pos = records.filter(::valid)
         val routeStep = max(1, (pos.size + 1499) / 1500)
         val route = pos.filterIndexed { i, _ -> i % routeStep == 0 || i == pos.lastIndex }
 
@@ -181,6 +182,8 @@ object Fit {
             hr = idx.map { records[it].hr },
             speed = idx.map { smooth[it] },
             alt = idx.map { records[it].alt },
+            sLat = idx.map { records[it].takeIf(::valid)?.lat },
+            sLon = idx.map { records[it].takeIf(::valid)?.lon },
             splits = splits(records, if (sport == Sport.RIDE) 5000.0 else 1000.0),
         )
     }

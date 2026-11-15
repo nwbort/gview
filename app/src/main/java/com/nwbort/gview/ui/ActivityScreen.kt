@@ -29,7 +29,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -162,52 +172,94 @@ private fun Details(a: Activity) {
     }
 }
 
-@Composable
-private fun Charts(a: Activity, t: Track) {
-    // Plot against distance where there is one, else time.
-    val byDist = t.dist.count { it != null } > t.t.size / 2 && (a.distanceM ?: 0.0) > 200
-    val xs = if (byDist) t.dist.map { ((it ?: 0.0) / 1000).toFloat() } else t.t.map { it / 60f }
-    val xFmt: (Float) -> String = if (byDist) { v -> "${Fmt.one(v.toDouble())} km" } else { v -> "${v.roundToInt()} min" }
-    val color = G.sport(a.sport)
+/** One of an activity's streams, ready to chart: pace or speed, heart rate, elevation. */
+private class Series(
+    val name: String,
+    val color: Color,
+    val ys: List<Float?>,
+    val yFmt: (Float) -> String,
+    val tipFmt: (Float) -> String,
+    /** Smaller is better and drawn higher (pace). */
+    val invert: Boolean = false,
+    val lowLabel: String? = null,
+    val highLabel: String? = null,
+)
 
+private val ElevationColor = Color(0xFF9C7A4A)
+
+/** The x axis: distance where there is one, else time. */
+private fun axis(a: Activity, t: Track): Pair<List<Float>, (Float) -> String> {
+    val byDist = t.dist.count { it != null } > t.t.size / 2 && (a.distanceM ?: 0.0) > 200
+    return if (byDist) t.dist.map { ((it ?: 0.0) / 1000).toFloat() } to { v -> "${Fmt.one(v.toDouble())} km" }
+    else t.t.map { it / 60f } to { v -> "${v.roundToInt()} min" }
+}
+
+private fun series(a: Activity, t: Track): List<Series> = buildList {
     if (t.speed.any { it != null } && a.sport != Sport.STRENGTH && (a.distanceM ?: 0.0) > 0) {
-        Panel {
-            val pace = a.sport.usesPace
-            Label(if (pace) "Pace" else if (a.sport == Sport.SWIM) "Pace /100m" else "Speed", color)
-            Spacer(Modifier.height(4.dp))
-            val ys = t.speed.map { s ->
+        val pace = a.sport.usesPace
+        val swim = a.sport == Sport.SWIM
+        val minFmt: (Float) -> String = { v -> "%d:%02d".format(v.toInt(), ((v - v.toInt()) * 60).roundToInt().coerceAtMost(59)) }
+        add(Series(
+            name = if (pace || swim) "Pace" else "Speed",
+            color = G.sport(a.sport),
+            ys = t.speed.map { s ->
                 when {
                     s == null -> null
                     pace -> if (s < 0.5) null else (1000 / s / 60).toFloat() // min/km
-                    a.sport == Sport.SWIM -> if (s < 0.2) null else (100 / s / 60).toFloat()
+                    swim -> if (s < 0.2) null else (100 / s / 60).toFloat()
                     else -> (s * 3.6).toFloat()
                 }
-            }
-            val minFmt: (Float) -> String = { v -> "%d:%02d".format(v.toInt(), ((v - v.toInt()) * 60).roundToInt().coerceAtMost(59)) }
-            val inverted = pace || a.sport == Sport.SWIM
-            LineChart(
-                xs, ys, color,
-                yFmt = if (inverted) minFmt else { v -> v.roundToInt().toString() },
-                tipFmt = if (inverted) { v -> minFmt(v) + if (a.sport == Sport.SWIM) " /100m" else " /km" } else { v -> "${Fmt.one(v.toDouble())} km/h" },
-                xFmt = xFmt,
-                invert = inverted,
-                robust = true,
-                description = "Pace chart",
-            )
-        }
+            },
+            yFmt = if (pace || swim) minFmt else { v -> v.roundToInt().toString() },
+            tipFmt = if (pace || swim) { v -> minFmt(v) + if (swim) " /100m" else " /km" } else { v -> "${Fmt.one(v.toDouble())} km/h" },
+            invert = pace || swim,
+            lowLabel = "Slower", highLabel = "Faster",
+        ))
     }
     if (t.hr.any { it != null }) {
-        Panel {
-            Label("Heart rate", G.heart)
-            Spacer(Modifier.height(4.dp))
-            LineChart(xs, t.hr.map { it?.toFloat() }, G.heart, tipFmt = { "${it.roundToInt()} bpm" }, xFmt = xFmt, description = "Heart rate chart")
-        }
+        add(Series("Heart rate", G.heart, t.hr.map { it?.toFloat() }, { it.roundToInt().toString() }, { "${it.roundToInt()} bpm" }))
     }
     if (t.alt.count { it != null } > 10 && (a.elevGainM ?: 0.0) > 5) {
+        add(Series("Elevation", ElevationColor, t.alt.map { it?.toFloat() }, { it.roundToInt().toString() }, { "${it.roundToInt()} m" }))
+    }
+}
+
+/** The 2nd and 98th percentiles: the range a colour scale spreads over. */
+private fun spread(ys: List<Float?>): Pair<Float, Float>? {
+    val v = ys.filterNotNull().sorted()
+    if (v.size < 2) return null
+    val lo = v[(v.size * 0.02).toInt()]; val hi = v[(v.size * 0.98).toInt().coerceAtMost(v.lastIndex)]
+    return if (hi - lo < 1e-3f) null else lo to hi
+}
+
+/** Pale to deep in the series' own colour: deeper is higher (or faster, for pace). */
+private fun ramp(s: Series): Pair<Color, Color> = lerp(s.color, Color.White, 0.55f) to lerp(s.color, Color.Black, 0.35f)
+
+private fun colorsFor(s: Series): List<Color?> {
+    val (lo, hi) = spread(s.ys) ?: return s.ys.map { v -> v?.let { s.color } }
+    val (pale, deep) = ramp(s)
+    return s.ys.map { v ->
+        v ?: return@map null
+        var f = ((v - lo) / (hi - lo)).coerceIn(0f, 1f)
+        if (s.invert) f = 1 - f
+        lerp(pale, deep, f)
+    }
+}
+
+@Composable
+private fun Charts(a: Activity, t: Track) {
+    val (xs, xFmt) = axis(a, t)
+    series(a, t).forEach { s ->
         Panel {
-            Label("Elevation", G.ink2)
+            Label(s.name, s.color)
             Spacer(Modifier.height(4.dp))
-            LineChart(xs, t.alt.map { it?.toFloat() }, Color(0xFF8A877E), height = 120.dp, tipFmt = { "${it.roundToInt()} m" }, xFmt = xFmt, description = "Elevation chart")
+            LineChart(
+                xs, s.ys, s.color,
+                height = if (s.color == ElevationColor) 120.dp else 160.dp,
+                yFmt = s.yFmt, tipFmt = s.tipFmt, xFmt = xFmt,
+                invert = s.invert, robust = s.invert,
+                description = "${s.name} chart",
+            )
         }
     }
 }
@@ -255,13 +307,71 @@ private fun Splits(a: Activity, t: Track) {
     }
 }
 
-/** The route full screen: pinch and drag to explore. */
+/**
+ * The route full screen: pinch and drag to explore. A chart along the bottom
+ * shows one stream at a time and colours the route by it; drag across the
+ * chart and a dot follows along the route.
+ */
 @Composable
 fun FullMapScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit) {
     val state = rememberTrack(a, vm)
     val track = (state as? TrackState.Ready)?.track
+    var chosen by rememberSaveable { mutableIntStateOf(0) }
+    var marker by remember { mutableStateOf<Int?>(null) }
+    val all = remember(track) { track?.let { series(a, it) }.orEmpty() }
+    val s = all.getOrNull(chosen) ?: all.firstOrNull()
+    val colors = remember(s) { s?.let(::colorsFor) }
+    val chartHeight = 260.dp
     Box(Modifier.fillMaxSize().background(G.wash)) {
-        if (track != null && track.hasRoute) RouteMap(track, G.sport(a.sport), Modifier.fillMaxSize(), interactive = true)
+        if (track != null && track.hasRoute) {
+            RouteMap(
+                track, G.sport(a.sport), Modifier.fillMaxSize(), interactive = true,
+                colors = colors, marker = marker, bottomInset = if (s != null) chartHeight else 0.dp,
+            )
+        }
         BackBubble(onBack, Modifier.systemBarsPadding().padding(8.dp))
+        if (track != null && s != null) {
+            val (xs, xFmt) = remember(track) { axis(a, track) }
+            Panel(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(12.dp),
+                padding = 14.dp,
+            ) {
+                if (all.size > 1) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        all.forEachIndexed { i, x ->
+                            FilterChip(
+                                selected = x === s,
+                                onClick = { chosen = i; marker = null },
+                                label = { Text(x.name) },
+                                leadingIcon = { Box(Modifier.size(8.dp).clip(CircleShape).background(x.color)) },
+                                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = G.wash, selectedLabelColor = G.ink, containerColor = Color.Transparent, labelColor = G.ink3),
+                                border = null,
+                            )
+                        }
+                    }
+                } else {
+                    Label(s.name, s.color)
+                }
+                LineChart(
+                    xs, s.ys, s.color,
+                    height = 130.dp,
+                    yFmt = s.yFmt, tipFmt = s.tipFmt, xFmt = xFmt,
+                    invert = s.invert, robust = s.invert,
+                    onScrub = { marker = it },
+                    description = "${s.name} chart",
+                )
+                spread(s.ys)?.let { (lo, hi) ->
+                    val (pale, deep) = ramp(s)
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        Text(s.lowLabel ?: s.tipFmt(lo), style = MaterialTheme.typography.bodySmall, color = G.ink3)
+                        Box(
+                            Modifier.padding(horizontal = 8.dp).weight(1f).height(6.dp).clip(CircleShape)
+                                .background(Brush.horizontalGradient(listOf(pale, deep)))
+                        )
+                        Text(s.highLabel ?: s.tipFmt(hi), style = MaterialTheme.typography.bodySmall, color = G.ink3)
+                    }
+                }
+            }
+        }
     }
 }

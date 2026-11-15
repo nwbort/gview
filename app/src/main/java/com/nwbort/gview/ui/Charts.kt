@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -108,6 +109,8 @@ fun LineChart(
     dots: Boolean = false,
     /** Fit the scale to the middle 96% of values and pin outliers to the edge. */
     robust: Boolean = false,
+    /** Called with the index (into [xs]) being read as a finger drags across, and null on release. */
+    onScrub: ((Int?) -> Unit)? = null,
     description: String = "",
 ) {
     val tm = rememberTextMeasurer()
@@ -123,8 +126,16 @@ fun LineChart(
     }
     @Suppress("NAME_SHADOWING") val ys = clipped
     val pts = xs.indices.mapNotNull { i -> ys.getOrNull(i)?.let { xs[i] to it } }
+    // Where the plot sits, from the last draw: lets a touch be turned into a data index.
+    val geometry = remember { FloatArray(4) }
+    val latest = rememberUpdatedState(Triple(xs, ys, onScrub))
     Canvas(
-        modifier.fillMaxWidth().height(height).scrub { touch = it }.semantics { contentDescription = description }
+        modifier.fillMaxWidth().height(height).scrub { x ->
+            touch = x
+            // The gesture handler outlives recompositions: read the current data, not the first.
+            val (cx, cy, cb) = latest.value
+            cb?.invoke(x?.let { nearestIndex(cx, cy, it, geometry) })
+        }.semantics { contentDescription = description }
     ) {
         if (pts.isEmpty()) return@Canvas
         val topPad = 26.dp.toPx()
@@ -142,6 +153,7 @@ fun LineChart(
             if (yMax == null) hi += pad
         }
         val x0 = xs.first(); val x1 = max(xs.last(), x0 + 1e-3f)
+        geometry[0] = leftPad; geometry[1] = w; geometry[2] = x0; geometry[3] = x1
         fun px(x: Float) = leftPad + (x - x0) / (x1 - x0) * w
         fun py(y: Float): Float { val f = (y - lo) / (hi - lo); return topPad + (if (invert) f else 1 - f) * h }
 
@@ -213,6 +225,14 @@ fun LineChart(
             drawCircle(color, 3.5.dp.toPx(), p)
         }
     }
+}
+
+/** The index of the non-null value nearest to screen x [px], given the plot's [geometry]. */
+private fun nearestIndex(xs: List<Float>, ys: List<Float?>, px: Float, geometry: FloatArray): Int? {
+    val (left, w, x0, x1) = geometry.toList()
+    if (w <= 0f) return null
+    val x = x0 + (px - left) / w * (x1 - x0)
+    return xs.indices.filter { ys.getOrNull(it) != null }.minByOrNull { abs(xs[it] - x) }
 }
 
 /** Bars from zero, rounded at the top, 2 dp apart. Tap or drag to read one. */

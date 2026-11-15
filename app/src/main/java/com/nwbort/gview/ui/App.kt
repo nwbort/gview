@@ -91,7 +91,7 @@ fun GviewRoot(vm: AppViewModel) {
                 if (a == null) LaunchedEffect(Unit) { back() } else FullMapScreen(a, vm, onBack = back)
             }
             is Screen.MetricDetail -> MetricScreen(top.metric, cache, onBack = back)
-            Screen.Settings -> SettingsScreen(account, cache, syncing, onSync = vm::sync, onConnect = vm::connect, onDisconnect = { vm.disconnect(); stack.clear() }, onBack = back)
+            Screen.Settings -> SettingsScreen(account, cache, syncing, onSync = vm::sync, onHistory = vm::setHistory, onConnect = vm::connect, onDisconnect = { vm.disconnect(); stack.clear() }, onBack = back)
             null -> Scaffold(
                 containerColor = G.paper,
                 snackbarHost = { SnackbarHost(snackbar) },

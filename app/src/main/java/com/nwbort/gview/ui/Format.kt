@@ -64,6 +64,7 @@ object Fmt {
 
     fun longDate(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("EEEE d MMMM", loc))
     fun shortDate(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("d MMM", loc))
+    fun monthYear(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("MMM yy", loc))
     fun weekday(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("EEE", loc))
     fun month(d: LocalDate): String = d.format(DateTimeFormatter.ofPattern("MMM", loc))
 

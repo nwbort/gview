@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.geometry.Offset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -95,8 +97,16 @@ class AppTest {
         shot("09-activity-splits")
 
         compose.onNodeWithContentDescription("Route map").performScrollTo().performClick()
-        compose.waitForIdle()
+        waitForText("Heart rate")
         shot("10-map")
+        // Switch the map's chart to heart rate and read it partway along: a dot marks the spot.
+        compose.onNodeWithText("Heart rate").performClick()
+        compose.onNodeWithContentDescription("Heart rate chart").performTouchInput {
+            down(center); moveTo(Offset(width * 0.6f, centerY))
+        }
+        compose.waitForIdle()
+        shot("10b-map-heart-rate")
+        compose.onNodeWithContentDescription("Heart rate chart").performTouchInput { up() }
         back()
         back()
 
@@ -115,9 +125,26 @@ class AppTest {
         shot("14-metric-hrv")
         back()
 
+        compose.onAllNodesWithText("All").onFirst().performClick() // the range picker's, at the top
+        compose.waitForIdle()
+        shot("12b-trends-all")
+
         compose.onNodeWithContentDescription("Settings").performClick()
         waitForText("Sync now")
         shot("15-settings")
+
+        // Two years of history: the older year is fetched on top of the first.
+        compose.onNodeWithText("History").performClick()
+        compose.onNodeWithText("2 years").performClick()
+        val backfillBy = System.currentTimeMillis() + 60_000
+        while (Graph.store.cache.value.historyYears != 2 || Graph.sync.running.value ||
+            (Graph.store.cache.value.summaries.keys.minOrNull() ?: "9") > java.time.LocalDate.now().minusDays(700).toString()) {
+            if (System.currentTimeMillis() > backfillBy) throw AssertionError("history not backfilled: ${Graph.store.cache.value.earliest}")
+            Thread.sleep(100)
+            compose.waitForIdle()
+        }
+        assertTrue(Graph.store.cache.value.activities.size > 500)
+        shot("16-settings-two-years")
         back()
     }
 

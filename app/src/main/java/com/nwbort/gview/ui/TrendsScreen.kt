@@ -59,7 +59,7 @@ fun TrendsScreen(cache: Cache, onSettings: () -> Unit, onMetric: (Metric) -> Uni
 private fun VolumeCard(cache: Cache, range: Range) {
     var sport by rememberSaveable { mutableStateOf<Sport?>(null) }
     val today = LocalDate.now()
-    val start = today.minusDays(range.days - 1)
+    val start = range.start(cache, today)
     val inRange = cache.activities.filter { it.date >= start && (sport == null || it.sport == sport) }
     val sports = cache.activities.filter { it.date >= start }.map { it.sport }.distinct().sortedBy { it.ordinal }
     val useTime = inRange.sumOf { it.distanceM ?: 0.0 } < 1.0
@@ -104,7 +104,7 @@ private fun VolumeCard(cache: Cache, range: Range) {
         BarChart(
             buckets.map { it.second },
             color,
-            labels = buckets.map { (d, _) -> if (weekly) Fmt.shortDate(d) else d.dayOfMonth.toString() },
+            labels = buckets.map { (d, _) -> if (range == Range.ALL) Fmt.monthYear(d) else if (weekly) Fmt.shortDate(d) else d.dayOfMonth.toString() },
             tipLabels = buckets.map { (d, _) -> if (weekly) "Week of ${Fmt.shortDate(d)}" else "${Fmt.weekday(d)} ${Fmt.shortDate(d)}" },
             yFmt = { "${it.roundToInt()}" },
             tipFmt = { "${Fmt.one(it.toDouble())} $unit" },
@@ -145,7 +145,7 @@ fun MetricScreen(metric: Metric, cache: Cache, onBack: () -> Unit) {
 @Composable
 private fun SleepScoreCard(cache: Cache, range: Range) {
     val today = LocalDate.now()
-    val start = today.minusDays(range.days - 1)
+    val start = range.start(cache, today)
     val days = generateSequence(start) { it.plusDays(1) }.takeWhile { !it.isAfter(today) }.toList()
     val ys = days.map { cache.sleep[it.toString()]?.score?.toFloat() }
     if (ys.all { it == null }) return

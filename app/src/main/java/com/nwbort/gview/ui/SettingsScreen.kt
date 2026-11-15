@@ -59,6 +59,7 @@ fun SettingsScreen(
     cache: Cache,
     syncing: Boolean,
     onSync: () -> Unit,
+    onHistory: (Int) -> Unit,
     onConnect: (String, LocalDate) -> Unit,
     onDisconnect: () -> Unit,
     onBack: () -> Unit,
@@ -97,6 +98,16 @@ fun SettingsScreen(
                         Text("Last sync missed", style = MaterialTheme.typography.titleSmall, color = G.ink)
                         cache.errors.forEach { (k, v) -> Text("$k: $v", style = MaterialTheme.typography.bodySmall, color = G.ink2) }
                     }
+                }
+                HorizontalDivider(color = G.line)
+                Column(Modifier.fillMaxWidth().clickable { dialog = "history" }.padding(18.dp)) {
+                    Text("History", style = MaterialTheme.typography.titleMedium, color = G.ink)
+                    val oldest = (cache.summaries.keys + cache.activities.map { it.start.take(10) }).minOrNull()
+                    Text(
+                        "Keeps ${years(cache.historyYears)}" + (oldest?.let { ", back to ${LocalDate.parse(it).format(DateTimeFormatter.ofPattern("d MMMM yyyy"))}" } ?: "") + ". Tap to change.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = G.ink2,
+                    )
                 }
                 HorizontalDivider(color = G.line)
                 Column(Modifier.fillMaxWidth().clickable { dialog = "key" }.padding(18.dp)) {
@@ -140,6 +151,27 @@ fun SettingsScreen(
     }
     when (dialog) {
         "key" -> KeyDialog(onDismiss = { dialog = null }, onConnect = { k, e -> dialog = null; onConnect(k, e) })
+        "history" -> AlertDialog(
+            onDismissRequest = { dialog = null },
+            containerColor = G.card,
+            title = { Text("History") },
+            text = {
+                Column {
+                    Text(
+                        "How far back to sync. Going further fetches the older data once, which can take a minute or two.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    HISTORY_CHOICES.forEach { y ->
+                        Row(Modifier.fillMaxWidth().clickable { dialog = null; onHistory(y) }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = cache.historyYears == y, onClick = { dialog = null; onHistory(y) })
+                            Text(years(y))
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { dialog = null }) { Text("Close") } },
+        )
         "off" -> AlertDialog(
             onDismissRequest = { dialog = null },
             title = { Text("Disconnect Garmin?") },
@@ -149,6 +181,10 @@ fun SettingsScreen(
         )
     }
 }
+
+private val HISTORY_CHOICES = listOf(1, 2, 3, 5)
+
+private fun years(n: Int) = if (n == 1) "1 year" else "$n years"
 
 private fun syncTime(ms: Long): String {
     val t = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault())

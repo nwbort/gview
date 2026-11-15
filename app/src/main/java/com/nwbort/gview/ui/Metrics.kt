@@ -24,7 +24,18 @@ import java.time.LocalDate
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.roundToInt
 
-enum class Range(val label: String, val days: Long) { MONTH("4W", 28), QUARTER("3M", 91), YEAR("1Y", 365) }
+enum class Range(val label: String, val days: Long) {
+    MONTH("4W", 28), QUARTER("3M", 91), YEAR("1Y", 365), ALL("All", 0);
+
+    /** Long enough that daily points are shown as weekly averages. */
+    val weekly: Boolean get() = this == YEAR || this == ALL
+
+    /** The first day shown: for All, the first day there's anything synced. */
+    fun start(c: Cache, today: LocalDate): LocalDate = if (this == ALL) {
+        (c.summaries.keys + c.sleep.keys + c.activities.map { it.start.take(10) }).minOrNull()
+            ?.let(LocalDate::parse)?.coerceAtMost(today.minusDays(27)) ?: today.minusDays(364)
+    } else today.minusDays(days - 1)
+}
 
 /** A daily health figure the app can chart over time. */
 enum class Metric(val title: String, val unit: String, val color: Color, val bars: Boolean = false, val sparse: Boolean = false) {
@@ -69,11 +80,12 @@ enum class Metric(val title: String, val unit: String, val color: Color, val bar
 
     /** One value per day over [range], or per week for long ranges of bars. Dates are the day (or Monday). */
     fun series(c: Cache, range: Range, today: LocalDate = LocalDate.now()): List<Pair<LocalDate, Float?>> {
-        val start = today.minusDays(range.days - 1)
+        val start = range.start(c, today)
         val days = generateSequence(start) { it.plusDays(1) }.takeWhile { !it.isAfter(today) }.toList()
         val daily = days.map { it to value(c, it) }
         if (sparse) return daily.filter { it.second != null }
-        if (!(bars && range == Range.YEAR)) return daily
+        // Weekly averages for bars over a year, and for everything over All.
+        if (!(bars && range.weekly) && range != Range.ALL) return daily
         return daily.groupBy { it.first.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)) }
             .map { (monday, vs) -> monday to vs.mapNotNull { it.second }.takeIf { it.isNotEmpty() }?.average()?.toFloat() }
     }
@@ -119,13 +131,13 @@ fun TrendCard(metric: Metric, cache: Cache, range: Range, modifier: Modifier = M
             Text("No ${metric.title.lowercase()} in this range.", style = MaterialTheme.typography.bodyMedium, color = G.ink3, modifier = Modifier.padding(vertical = 24.dp))
             return@Panel
         }
-        val weekly = metric.bars && range == Range.YEAR
+        val weekly = (metric.bars && range.weekly) || (range == Range.ALL && !metric.sparse)
         if (metric.bars) {
             BarChart(
                 s.map { it.second },
                 metric.color,
                 height = height,
-                labels = s.map { (d, _) -> if (range == Range.MONTH) d.dayOfMonth.toString() else Fmt.shortDate(d) },
+                labels = s.map { (d, _) -> when (range) { Range.MONTH -> d.dayOfMonth.toString(); Range.ALL -> Fmt.monthYear(d); else -> Fmt.shortDate(d) } },
                 tipLabels = s.map { (d, _) -> if (weekly) "Week of ${Fmt.shortDate(d)}" else "${Fmt.weekday(d)} ${Fmt.shortDate(d)}" },
                 yFmt = metric::axis,
                 tipFmt = metric::fmt,
@@ -144,7 +156,7 @@ fun TrendCard(metric: Metric, cache: Cache, range: Range, modifier: Modifier = M
                 height = height,
                 yFmt = metric::axis,
                 tipFmt = metric::fmt,
-                xFmt = { Fmt.shortDate(first.plusDays(it.toLong())) },
+                xFmt = { first.plusDays(it.toLong()).let { d -> if (range == Range.ALL) "${Fmt.shortDate(d)} ${d.year}" else Fmt.shortDate(d) } },
                 band = hrvBand,
                 dots = metric.sparse && s.size < 40,
                 fill = !metric.sparse,

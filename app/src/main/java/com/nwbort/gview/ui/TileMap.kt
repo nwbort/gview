@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -131,7 +132,18 @@ class TileCache(context: Context) {
  * drag to look around.
  */
 @Composable
-fun RouteMap(track: Track, color: Color, modifier: Modifier = Modifier, interactive: Boolean = false) {
+fun RouteMap(
+    track: Track,
+    color: Color,
+    modifier: Modifier = Modifier,
+    interactive: Boolean = false,
+    /** Per-sample colours (aligned with the track's samples): draws the route coloured by a metric. */
+    colors: List<Color?>? = null,
+    /** A sample to mark with a dot, e.g. where a chart is being read. */
+    marker: Int? = null,
+    /** Space covered at the bottom (e.g. by a chart), kept clear when fitting the route. */
+    bottomInset: Dp = 0.dp,
+) {
     val tiles = Graph.tiles
     val version by tiles.version.collectAsState()
     val density = LocalDensity.current
@@ -148,10 +160,14 @@ fun RouteMap(track: Track, color: Color, modifier: Modifier = Modifier, interact
         val tilePx = with(density) { 256.dp.toPx() }
         val minX = xs.min(); val maxX = xs.max(); val minY = ys.min(); val maxY = ys.max()
         val pad = 0.82
+        val inset = with(density) { bottomInset.toPx() }
+        val h = (size.height - inset).coerceAtLeast(size.height * 0.3f)
         val zx = log2(size.width * pad / (max(maxX - minX, 1e-9) * tilePx))
-        val zy = log2(size.height * pad / (max(maxY - minY, 1e-9) * tilePx))
+        val zy = log2(h * pad / (max(maxY - minY, 1e-9) * tilePx))
         zoom = min(min(zx, zy), 17.0).toFloat()
-        center = Offset(((minX + maxX) / 2).toFloat(), ((minY + maxY) / 2).toFloat())
+        val worldPx = tilePx * 2.0.pow(zoom.toDouble())
+        // Centre the route in the uncovered part of the view.
+        center = Offset(((minX + maxX) / 2).toFloat(), ((minY + maxY) / 2 + (size.height - h) / 2 / worldPx).toFloat())
         fitted = size.width
     }
 
@@ -196,17 +212,39 @@ fun RouteMap(track: Track, color: Color, modifier: Modifier = Modifier, interact
                 if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
             }
             drawPath(path, Color.White, style = Stroke(7.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            drawPath(path, color, style = Stroke(3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            fun sample(i: Int): Offset? {
+                val la = track.sLat.getOrNull(i) ?: return null; val lo = track.sLon.getOrNull(i) ?: return null
+                return Offset(ox + (Mercator.x(lo) * worldPx).toFloat(), oy + (Mercator.y(la) * worldPx).toFloat())
+            }
+            if (colors != null && track.sLat.isNotEmpty()) {
+                // The route through the samples, each stretch in its value's colour.
+                drawPath(path, G.ink3.copy(alpha = 0.5f), style = Stroke(3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                val w = 4.dp.toPx()
+                var prev: Offset? = null
+                for (i in track.sLat.indices) {
+                    val p = sample(i)
+                    val c = colors.getOrNull(i)
+                    if (p != null && prev != null && c != null) drawLine(c, prev, p, w, cap = StrokeCap.Round)
+                    if (p != null) prev = p
+                }
+            } else {
+                drawPath(path, color, style = Stroke(3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
             val start = Offset(ox + (xs.first() * worldPx).toFloat(), oy + (ys.first() * worldPx).toFloat())
             val end = Offset(ox + (xs.last() * worldPx).toFloat(), oy + (ys.last() * worldPx).toFloat())
             drawCircle(Color.White, 7.dp.toPx(), end); drawCircle(G.ink, 4.5.dp.toPx(), end)
             drawCircle(Color.White, 7.dp.toPx(), start); drawCircle(G.hrv, 4.5.dp.toPx(), start)
+            marker?.let { sample(it) }?.let { p ->
+                drawCircle(color.copy(alpha = 0.2f), 16.dp.toPx(), p)
+                drawCircle(Color.White, 8.dp.toPx(), p)
+                drawCircle(G.ink, 5.5.dp.toPx(), p)
+            }
         }
         Text(
             "© OpenStreetMap contributors",
             color = G.ink3,
             fontSize = 9.sp,
-            modifier = Modifier.align(Alignment.BottomEnd).background(Color.White.copy(alpha = 0.7f)).padding(horizontal = 4.dp, vertical = 1.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = bottomInset).background(Color.White.copy(alpha = 0.7f)).padding(horizontal = 4.dp, vertical = 1.dp),
         )
     }
 }

@@ -152,6 +152,10 @@ data class Cache(
     val syncedTo: String? = null,
     /** The day each kind of data was last fetched up to, by section name. */
     val covered: Map<String, String> = emptyMap(),
+    /** The earliest day each kind of data has been fetched from. */
+    val earliest: Map<String, String> = emptyMap(),
+    /** How many years back to sync, from Settings. */
+    val historyYears: Int = 1,
     /** What failed on the last sync, by section ("Sleep", "HRV" ...). */
     val errors: Map<String, String> = emptyMap(),
 ) {
@@ -196,6 +200,9 @@ data class Track(
     /** Smoothed speed, m/s. */
     val speed: List<Double?> = emptyList(),
     val alt: List<Double?> = emptyList(),
+    /** Where each sample above was recorded, for marking a chart point on the map. */
+    val sLat: List<Double?> = emptyList(),
+    val sLon: List<Double?> = emptyList(),
     val splits: List<Split> = emptyList(),
 ) {
     val hasRoute: Boolean get() = lat.size >= 2

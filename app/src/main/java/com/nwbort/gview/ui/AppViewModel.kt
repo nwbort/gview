@@ -44,6 +44,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** How many years to keep; a longer history is fetched straight away. */
+    fun setHistory(years: Int) {
+        viewModelScope.launch {
+            Graph.store.updateCache { it.copy(historyYears = years) }
+            report(Graph.sync.sync())
+        }
+    }
+
     fun connect(key: String, expires: LocalDate) {
         viewModelScope.launch {
             Graph.store.updateAccount { Account(apiKey = key.trim(), keyExpires = expires.toString()) }

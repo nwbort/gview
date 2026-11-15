@@ -6,8 +6,9 @@ activities and trends, synced from Garmin Connect and kept on the phone.
 | Tab | What's there |
 | --- | --- |
 | **Today** | Body Battery, sleep score, HRV and resting heart rate, each with its last two weeks. Below: last night's sleep and its stages, Body Battery through the day, steps and movement, stress, and the day's activities. Swipe (or use the arrows) for earlier days. |
-| **Activities** | Everything from the last year, by week with weekly totals, filterable by sport. Each one shows its route's shape. Tap for the route on a map (tap the map to pinch and pan), pace, heart rate and elevation charts, kilometre splits (5 km for rides), and the rest of Garmin's numbers. |
-| **Trends** | Training volume by week or day, and sleep, HRV (with your balanced range), Body Battery, resting heart rate, steps, stress, VO₂ max and weight over 4 weeks, 3 months or a year. Drag across any chart to read values; tap a card for more. |
+| **Activities** | Everything synced, by week with weekly totals, filterable by sport. Each one shows its route's shape. Tap for the route on a map, pace, heart rate and elevation charts, kilometre splits (5 km for rides), and the rest of Garmin's numbers. |
+| **Map** | Tap an activity's map for it full screen: pinch and pan, with one chart along the bottom (pace, heart rate or elevation). The route is coloured by whichever is shown, and dragging along the chart moves a dot along the route. |
+| **Trends** | Training volume by week or day, and sleep, HRV (with your balanced range), Body Battery, resting heart rate, steps, stress, VO₂ max and weight over 4 weeks, 3 months, a year or everything synced. Drag across any chart to read values; tap a card for more. |
 
 There's also a **home screen widget** with Body Battery, sleep, HRV and steps.
 
@@ -24,8 +25,9 @@ backups.
 
 ## How it syncs
 
-- The first sync pulls a year. After that each sync fetches the last week or
-  so: when the app opens (at most every 15 minutes), when you pull down on
+- The first sync pulls a year; **Settings → History** goes back 2, 3 or 5
+  years (the older stretch is fetched once). After that each sync fetches
+  the last week or so: when the app opens (at most every 15 minutes), when you pull down on
   Today or Activities, and every few hours in the background.
 - Each kind of data is a separate Garmin call. If one Garmin service fails,
   the rest still sync, and Settings lists what was missed.
