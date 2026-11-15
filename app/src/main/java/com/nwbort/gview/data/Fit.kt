@@ -151,7 +151,7 @@ object Fit {
     }
 
     /** Bump when [track] changes, so routes decoded before are decoded again. */
-    const val VERSION = 3
+    const val VERSION = 4
 
     private const val SEMI = 180.0 / 2147483648.0
 
@@ -159,7 +159,7 @@ object Fit {
      * The route, charts and splits for an activity, downsampled so a long ride
      * still draws instantly. Splits are every kilometre (5 km for rides).
      */
-    fun track(records: List<Record>, sport: Sport): Track {
+    fun track(records: List<Record>, sport: Sport, date: String = ""): Track {
         if (records.isEmpty()) return Track(v = VERSION)
         val t0 = records.first().time
         fun valid(r: Record) = r.lat != null && r.lon != null && abs(r.lat) <= 90 && !(r.lat == 0.0 && r.lon == 0.0)
@@ -170,6 +170,9 @@ object Fit {
         // Smooth speed over a minute of time (watches record every 1-10 s), leaving out
         // standing still, so the pace chart reads as a trend rather than GPS noise and stops.
         val smooth = smoothSpeed(records, 30)
+        val foot = sport == Sport.RUN || sport == Sport.WALK
+        val hilly = foot && records.mapNotNull { it.alt }.let { it.size > 10 && it.max() - it.min() > 30 }
+        val gap = if (hilly) smoothValues(records, Analysis.gapSpeeds(records), 30) else null
         val step = max(1, (records.size + 599) / 600)
         val idx = records.indices.filter { it % step == 0 || it == records.lastIndex }
 
@@ -184,8 +187,22 @@ object Fit {
             alt = idx.map { records[it].alt },
             sLat = idx.map { records[it].takeIf(::valid)?.lat },
             sLon = idx.map { records[it].takeIf(::valid)?.lon },
+            gap = gap?.let { g -> idx.map { g[it] } } ?: emptyList(),
+            stats = if (sport == Sport.RUN) Analysis.runStats(date, records) else null,
             splits = splits(records, if (sport == Sport.RIDE) 5000.0 else 1000.0),
         )
+    }
+
+    /** Mean of [values] within [halfWindowS] seconds either side of each record; null where the value is. */
+    fun smoothValues(records: List<Record>, values: List<Double?>, halfWindowS: Long): List<Double?> {
+        var lo = 0; var hi = 0
+        var sum = 0.0; var n = 0
+        return records.indices.map { i ->
+            val t = records[i].time
+            while (hi < records.size && records[hi].time <= t + halfWindowS) { values[hi]?.let { sum += it; n++ }; hi++ }
+            while (records[lo].time < t - halfWindowS) { values[lo]?.let { sum -= it; n-- }; lo++ }
+            if (values[i] == null || n == 0) null else sum / n
+        }
     }
 
     /** Mean moving speed within [halfWindowS] seconds either side of each record; null while stopped. */

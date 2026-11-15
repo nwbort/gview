@@ -49,6 +49,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.nwbort.gview.data.Activity
+import com.nwbort.gview.data.Analysis
+import com.nwbort.gview.data.RunStats
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.nwbort.gview.data.GarminApi
 import com.nwbort.gview.data.Sport
 import com.nwbort.gview.data.Track
@@ -70,6 +73,7 @@ private fun rememberTrack(a: Activity, vm: AppViewModel): TrackState {
 @Composable
 fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () -> Unit) {
     val state = rememberTrack(a, vm)
+    val cache by vm.cache.collectAsStateWithLifecycle()
     val track = (state as? TrackState.Ready)?.track
     val color = G.sport(a.sport)
     val context = LocalContext.current
@@ -94,6 +98,7 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
                 }
                 Hero(a)
                 Details(a)
+                track?.stats?.let { Effort(a, it, cache.runStats.values) }
                 if (track != null) Charts(a, track)
                 if (track != null && track.splits.size > 1) Splits(a, track)
                 TextButton(onClick = { openLink(context, GarminApi.activityUrl(a.id)) }) {
@@ -105,6 +110,39 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
             }
         }
         BackBubble(onBack, Modifier.statusBarsPadding().padding(8.dp))
+    }
+}
+
+/** What the run says about fitness: flat-ground pace, efficiency, and how steady HR held. */
+@Composable
+private fun Effort(a: Activity, st: RunStats, all: Collection<RunStats>) {
+    Panel {
+        Label("Effort", G.fitness)
+        Spacer(Modifier.height(10.dp))
+        val ref = Analysis.referenceHr(all + st)
+        val eff = st.efficiency
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Stat("Grade-adjusted pace", Fmt.pace(st.gapMps), "/km", Modifier.weight(1f))
+            if (eff != null && ref != null) Stat("Pace at $ref bpm", Fmt.pace(Analysis.speedAt(eff, ref)), "/km", Modifier.weight(1f))
+            st.driftPct?.let { Stat("HR drift", Fmt.one(it), "%", Modifier.weight(1f)) }
+        }
+        Spacer(Modifier.height(10.dp))
+        val drift = st.driftPct
+        Text(
+            buildString {
+                append("Grade-adjusted pace is your pace as if the hills were flat. ")
+                if (eff != null && ref != null) append("Pace at $ref bpm is how fast that effort would be at your typical running heart rate: faster over the months means fitter. ")
+                if (drift != null) append(
+                    when {
+                        drift < 5 -> "HR held steady through the second half (under 5% drift): well within your aerobic range."
+                        drift < 10 -> "Some drift in the second half (5–10%): a solid aerobic workout near the edge of your endurance."
+                        else -> "HR rose a lot for the same pace in the second half (over 10%): fatigue, heat or under-fuelling, or a long run beyond current endurance."
+                    }
+                )
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = G.ink2,
+        )
     }
 }
 
@@ -183,7 +221,11 @@ private class Series(
     val invert: Boolean = false,
     val lowLabel: String? = null,
     val highLabel: String? = null,
+    /** A companion line on the same scale, e.g. grade-adjusted pace. */
+    val other: Pair<String, List<Float?>>? = null,
 )
+
+private val GapColor = Color(0xFF8A877E)
 
 private val ElevationColor = Color(0xFF9C7A4A)
 
@@ -214,6 +256,9 @@ private fun series(a: Activity, t: Track): List<Series> = buildList {
             tipFmt = if (pace || swim) { v -> minFmt(v) + if (swim) " /100m" else " /km" } else { v -> "${Fmt.one(v.toDouble())} km/h" },
             invert = pace || swim,
             lowLabel = "Slower", highLabel = "Faster",
+            other = t.gap.takeIf { pace && it.any { g -> g != null } }?.let { g ->
+                "Grade-adjusted" to g.map { v -> if (v == null || v < 0.5) null else (1000 / v / 60).toFloat() }
+            },
         ))
     }
     if (t.hr.any { it != null }) {
@@ -258,8 +303,16 @@ private fun Charts(a: Activity, t: Track) {
                 height = if (s.color == ElevationColor) 120.dp else 160.dp,
                 yFmt = s.yFmt, tipFmt = s.tipFmt, xFmt = xFmt,
                 invert = s.invert, robust = s.invert,
+                others = listOfNotNull(s.other?.let { it.second to GapColor }),
+                tipAt = s.other?.let { (_, g) -> { i -> "${xFmt(xs[i])}  ·  ${s.ys[i]?.let(s.tipFmt) ?: "–"}" + (g.getOrNull(i)?.let { "  ·  GAP ${s.yFmt(it)}" } ?: "") } },
                 description = "${s.name} chart",
             )
+            s.other?.let { (name, _) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Legend(s.color, s.name, "")
+                    Legend(GapColor, name, "")
+                }
+            }
         }
     }
 }
@@ -357,6 +410,7 @@ fun FullMapScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit) {
                     height = 130.dp,
                     yFmt = s.yFmt, tipFmt = s.tipFmt, xFmt = xFmt,
                     invert = s.invert, robust = s.invert,
+                    others = listOfNotNull(s.other?.let { it.second to GapColor }),
                     onScrub = { marker = it },
                     description = "${s.name} chart",
                 )

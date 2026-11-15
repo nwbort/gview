@@ -156,17 +156,40 @@ class Sync(private val context: Context, private val store: Store, private val a
             .filter { it.hasRoute && it.start >= since && !store.hasTrack(it.id) }
             .take(PREFETCH_MAX)
             .forEach { a -> runCatching { track(a) } }
+        // Then work through older runs' files for efficiency and drift, a batch per sync.
+        val c = store.cache.value
+        c.sortedActivities
+            .filter { it.sport == com.nwbort.gview.data.Sport.RUN && it.id !in c.analysed }
+            .take(ANALYSE_MAX)
+            .forEach { a ->
+                // A run with no file to fetch is still done with, so it doesn't hold up the rest.
+                if (runCatching { track(a, refresh = true) }.isFailure) store.updateCache { it.copy(analysed = it.analysed + a.id) }
+            }
     }
 
     /** The activity's route and streams: from the phone if fetched before, else from Garmin. */
-    suspend fun track(activity: Activity): Track? = trackMutex.withLock {
-        store.track(activity.id)?.takeIf { it.v >= Fit.VERSION }?.let { return it }
+    suspend fun track(activity: Activity, refresh: Boolean = false): Track? = trackMutex.withLock {
+        store.track(activity.id)?.takeIf { it.v >= Fit.VERSION }?.let { t ->
+            // Decoded before this run was analysed: record its stats now, no download needed.
+            if (refresh || activity.id !in store.cache.value.analysed) store.updateCache { c ->
+                c.copy(analysed = c.analysed + activity.id, runStats = t.stats?.let { c.runStats + (activity.id to it) } ?: c.runStats)
+            }
+            return t
+        }
         val key = store.account.value.apiKey ?: return null
         withContext(Dispatchers.IO) {
             val bytes = withToken(key) { api.activityFile(it, activity.id) }
             val fit = Fit.unzip(bytes) ?: return@withContext Track(v = Fit.VERSION)
-            Fit.track(Fit.records(fit), activity.sport)
-        }.also { store.saveTrack(activity.id, it) }
+            Fit.track(Fit.records(fit), activity.sport, activity.date.toString())
+        }.also { t ->
+            store.saveTrack(activity.id, t)
+            store.updateCache { c ->
+                c.copy(
+                    analysed = c.analysed + activity.id,
+                    runStats = t.stats?.let { c.runStats + (activity.id to it) } ?: c.runStats,
+                )
+            }
+        }
     }
 
     /** Runs [call] with a cached token, getting a fresh one when it's near expiry or turned down. */
@@ -197,6 +220,7 @@ class Sync(private val context: Context, private val store: Store, private val a
         private const val BB_KEEP_DAYS = 14L
         private const val PREFETCH_DAYS = 45L
         private const val PREFETCH_MAX = 25
+        private const val ANALYSE_MAX = 40
         private const val WORK = "garmin-sync"
 
         /** Background sync every few hours while connected; cancelled when not. */

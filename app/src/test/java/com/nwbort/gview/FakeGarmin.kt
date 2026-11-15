@@ -49,7 +49,7 @@ class FakeGarmin(private val today: LocalDate = LocalDate.now()) : GarminApi("ht
                 val km = 16.0 + 6 * noise(d, 5)
                 Activity(id, "Long Run", "trail_running", start, distanceM = km * 1000, durationS = km * 345, elevGainM = 340.0,
                     avgSpeed = 1000 / 345.0, avgHr = 142.0, maxHr = 165.0, calories = km * 70, cadence = 168.0, aerobicTe = 3.8,
-                    teLabel = "BASE", vo2Max = 54.0, location = "Manly", hasRoute = true)
+                    teLabel = "BASE", vo2Max = 54.0, location = "Manly", hasRoute = true, trainingLoad = 260.0)
             }
             DayOfWeek.SUNDAY -> {
                 val km = 40.0 + 25 * noise(d, 6)
@@ -86,7 +86,8 @@ class FakeGarmin(private val today: LocalDate = LocalDate.now()) : GarminApi("ht
             val secs = (7 * 3600 + 3000 * wave(d, 6) + 1800 * noise(d, 13)).roundToInt()
             val bed = d.minusDays(1).atTime(22, 30 + (20 * noise(d, 14)).roundToInt()).toInstant(ZoneOffset.UTC).toEpochMilli()
             Sleep(d.toString(), secs, deepS = secs / 5, lightS = secs / 2, remS = secs - secs / 5 - secs / 2, awakeS = 1500,
-                score = (78 + 12 * wave(d, 6) + 4 * noise(d, 15)).roundToInt().coerceAtMost(100), qualifier = "GOOD",
+                // Worse after Wednesday's evening strength session.
+                score = (78 + 12 * wave(d, 6) + 4 * noise(d, 15) - if (d.dayOfWeek == DayOfWeek.THURSDAY) 9 else 0).roundToInt().coerceAtMost(100), qualifier = "GOOD",
                 startLocalMs = bed, endLocalMs = bed + (secs + 1500) * 1000L, avgHr = 52.0, respiration = 14.2, awakeCount = 2, needMin = 480)
         }
     }
@@ -94,7 +95,9 @@ class FakeGarmin(private val today: LocalDate = LocalDate.now()) : GarminApi("ht
     override fun hrv(token: String, from: LocalDate, to: LocalDate): List<Hrv> {
         calls++
         return days(from, to).map { d ->
-            Hrv(d.toString(), lastNight = (62 + 8 * wave(d, 13) + 6 * noise(d, 16)).roundToInt(), weeklyAvg = 63, high5 = 88,
+            // Lower the night after the weekend's long run and ride.
+            val after = when (d.dayOfWeek) { DayOfWeek.SUNDAY -> 0.86; DayOfWeek.MONDAY -> 0.92; DayOfWeek.WEDNESDAY -> 1.04; else -> 1.0 }
+            Hrv(d.toString(), lastNight = ((62 + 8 * wave(d, 13) + 6 * noise(d, 16)) * after).roundToInt(), weeklyAvg = 63, high5 = 88,
                 status = "BALANCED", balancedLow = 55, balancedUpper = 72, lowUpper = 50)
         }
     }

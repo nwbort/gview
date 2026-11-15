@@ -154,6 +154,10 @@ data class Cache(
     val covered: Map<String, String> = emptyMap(),
     /** The earliest day each kind of data has been fetched from. */
     val earliest: Map<String, String> = emptyMap(),
+    /** Per-run efficiency and drift, by activity id, worked out from each run's file. */
+    val runStats: Map<Long, RunStats> = emptyMap(),
+    /** Runs whose files have been looked at (some have nothing to say: too short, no HR). */
+    val analysed: Set<Long> = emptySet(),
     /** How many years back to sync, from Settings. */
     val historyYears: Int = 1,
     /** What failed on the last sync, by section ("Sleep", "HRV" ...). */
@@ -203,6 +207,9 @@ data class Track(
     /** Where each sample above was recorded, for marking a chart point on the map. */
     val sLat: List<Double?> = emptyList(),
     val sLon: List<Double?> = emptyList(),
+    /** Smoothed grade-adjusted speed, m/s (runs and walks with elevation). */
+    val gap: List<Double?> = emptyList(),
+    val stats: RunStats? = null,
     val splits: List<Split> = emptyList(),
 ) {
     val hasRoute: Boolean get() = lat.size >= 2

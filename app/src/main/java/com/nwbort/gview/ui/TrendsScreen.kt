@@ -45,6 +45,9 @@ fun TrendsScreen(cache: Cache, onSettings: () -> Unit, onMetric: (Metric) -> Uni
         RangePicker(range, { range = it }, Modifier.padding(horizontal = 16.dp))
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             VolumeCard(cache, range)
+            FitnessCard(cache, range)
+            EfficiencyCard(cache, range)
+            RecoveryCard(cache)
             Metric.entries.forEach { m ->
                 // Weight and VO₂ max only show up for people who have them.
                 if (m.sparse && m.series(cache, Range.YEAR).isEmpty()) return@forEach

@@ -10,6 +10,28 @@ activities and trends, synced from Garmin Connect and kept on the phone.
 | **Map** | Tap an activity's map for it full screen: pinch and pan, with one chart along the bottom (pace, heart rate or elevation). The route is coloured by whichever is shown, and dragging along the chart moves a dot along the route. |
 | **Trends** | Training volume by week or day, and sleep, HRV (with your balanced range), Body Battery, resting heart rate, steps, stress, VO₂ max and weight over 4 weeks, 3 months, a year or everything synced. Drag across any chart to read values; tap a card for more. |
 
+**Analysis**, on Trends and each run's page:
+
+- **Fitness & fatigue.** Six-week training load (fitness) against the last
+  week's (fatigue), and the gap between (form: building, steady, fresh or
+  overreaching). Uses Garmin's training load per activity, or a heart-rate
+  estimate where it has none.
+- **Aerobic efficiency.** Each run's *grade-adjusted pace* (pace as if the
+  hills were flat) scaled to your typical running heart rate, with its
+  six-run trend: faster over the months means fitter. Long runs also show
+  **heart-rate drift**: how much HR rose for the same effort in the second
+  half (under 5% means the distance is within your endurance). Each run's
+  page shows its grade-adjusted pace, the same efficiency figure and its
+  drift, and the pace chart gains a grade-adjusted line.
+- **Recovery.** Plain findings from your own data: how far HRV drops after
+  hard days (your top quarter by load) and how many nights it takes to come
+  back, what rest days do, resting HR the morning after, and what goes with
+  better or worse sleep (evening workouts, stressful days, hard days). Only
+  what the data clearly shows is listed.
+
+Efficiency and drift need each run's file, so after each sync the app works
+through older runs, 40 at a time, in the background.
+
 There's also a **home screen widget** with Body Battery, sleep, HRV and steps.
 
 ## Connecting Garmin

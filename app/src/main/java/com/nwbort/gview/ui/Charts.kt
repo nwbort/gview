@@ -111,21 +111,29 @@ fun LineChart(
     robust: Boolean = false,
     /** Called with the index (into [xs]) being read as a finger drags across, and null on release. */
     onScrub: ((Int?) -> Unit)? = null,
+    /** More lines on the same scale (same unit only), drawn thinner and unfilled. */
+    others: List<Pair<List<Float?>, Color>> = emptyList(),
+    /** Draw [others] as dots (individual readings) rather than lines. */
+    othersAsDots: Boolean = false,
+    /** The tooltip for the value at an index, when it should say more than one number. */
+    tipAt: ((Int) -> String)? = null,
     description: String = "",
 ) {
     val tm = rememberTextMeasurer()
     var touch by remember { mutableStateOf<Float?>(null) }
-    val clipped = remember(ys, robust) {
-        if (!robust) ys else {
+    val clipped = remember(ys, others, robust) {
+        if (!robust) ys to others else {
             val sorted = ys.filterNotNull().sorted()
-            if (sorted.size < 20) ys else {
+            if (sorted.size < 20) ys to others else {
                 val lo = sorted[(sorted.size * 0.02).toInt()]; val hi = sorted[(sorted.size * 0.98).toInt().coerceAtMost(sorted.lastIndex)]
-                ys.map { it?.coerceIn(lo, hi) }
+                ys.map { it?.coerceIn(lo, hi) } to others.map { (o, c) -> o.map { it?.coerceIn(lo, hi) } to c }
             }
         }
     }
-    @Suppress("NAME_SHADOWING") val ys = clipped
+    @Suppress("NAME_SHADOWING") val ys = clipped.first
+    @Suppress("NAME_SHADOWING") val others = clipped.second
     val pts = xs.indices.mapNotNull { i -> ys.getOrNull(i)?.let { xs[i] to it } }
+    val idxOf = xs.indices.filter { ys.getOrNull(it) != null }
     // Where the plot sits, from the last draw: lets a touch be turned into a data index.
     val geometry = remember { FloatArray(4) }
     val latest = rememberUpdatedState(Triple(xs, ys, onScrub))
@@ -143,8 +151,9 @@ fun LineChart(
         val leftPad = 30.dp.toPx()
         val w = size.width - leftPad
         val h = size.height - topPad - bottomPad
-        var lo = yMin ?: pts.minOf { it.second }
-        var hi = yMax ?: pts.maxOf { it.second }
+        val all = pts.map { it.second } + others.flatMap { it.first.filterNotNull() }
+        var lo = yMin ?: all.min()
+        var hi = yMax ?: all.max()
         band?.let { lo = min(lo, it.first); hi = max(hi, it.second) }
         if (hi - lo < 1e-3f) { lo -= 1; hi += 1 }
         if (yMin == null || yMax == null) {
@@ -174,25 +183,35 @@ fun LineChart(
             drawRect(color.copy(alpha = 0.08f), Offset(leftPad, top), Size(w, bot - top))
         }
 
-        // The line, broken at gaps; gently curved between points.
-        val segments = mutableListOf<MutableList<Offset>>()
-        var current: MutableList<Offset>? = null
-        xs.indices.forEach { i ->
-            val y = ys.getOrNull(i)
-            if (y == null) { current = null } else {
-                if (current == null) { current = mutableListOf<Offset>().also { segments += it } }
-                current!!.add(Offset(px(xs[i]), py(y)))
+        // Lines broken at gaps; gently curved between points.
+        fun segmentsOf(values: List<Float?>): List<List<Offset>> {
+            val segs = mutableListOf<MutableList<Offset>>()
+            var current: MutableList<Offset>? = null
+            xs.indices.forEach { i ->
+                val y = values.getOrNull(i)
+                if (y == null) { current = null } else {
+                    if (current == null) { current = mutableListOf<Offset>().also { segs += it } }
+                    current!!.add(Offset(px(xs[i]), py(y)))
+                }
             }
+            return segs
         }
-        val baseY = topPad + h
-        segments.forEach { seg ->
-            val path = Path()
-            path.moveTo(seg[0].x, seg[0].y)
+        fun curve(seg: List<Offset>) = Path().apply {
+            moveTo(seg[0].x, seg[0].y)
             for (k in 1 until seg.size) {
                 val a = seg[k - 1]; val b = seg[k]
                 val mx = (a.x + b.x) / 2
-                path.cubicTo(mx, a.y, mx, b.y, b.x, b.y)
+                cubicTo(mx, a.y, mx, b.y, b.x, b.y)
             }
+        }
+        others.forEach { (values, c) ->
+            if (othersAsDots) segmentsOf(values).flatten().forEach { drawCircle(c, 3.dp.toPx(), it) }
+            else segmentsOf(values).forEach { seg -> if (seg.size > 1) drawPath(curve(seg), c, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)) }
+        }
+        val segments = segmentsOf(ys)
+        val baseY = topPad + h
+        segments.forEach { seg ->
+            val path = curve(seg)
             if (fill && seg.size > 1) {
                 val area = Path().apply {
                     addPath(path)
@@ -211,12 +230,16 @@ fun LineChart(
 
         val t = touch
         if (t != null) {
-            val near = pts.minBy { abs(px(it.first) - t) }
+            val k = pts.indices.minBy { abs(px(pts[it].first) - t) }
+            val near = pts[k]
             val p = Offset(px(near.first), py(near.second))
             drawLine(G.ink3, Offset(p.x, topPad), Offset(p.x, topPad + h), 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+            others.forEach { (values, c) ->
+                values.getOrNull(idxOf[k])?.let { v -> drawCircle(Color.White, 5.dp.toPx(), Offset(p.x, py(v))); drawCircle(c, 3.dp.toPx(), Offset(p.x, py(v))) }
+            }
             drawCircle(Color.White, 6.dp.toPx(), p)
             drawCircle(color, 4.dp.toPx(), p)
-            tooltip(tm, "${xFmt(near.first)}  ·  ${tipFmt(near.second)}", p.x)
+            tooltip(tm, tipAt?.invoke(idxOf[k]) ?: "${xFmt(near.first)}  ·  ${tipFmt(near.second)}", p.x)
         } else {
             // Mark the most recent value.
             val last = pts.last()

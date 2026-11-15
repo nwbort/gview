@@ -114,9 +114,23 @@ class AppTest {
         compose.waitForIdle()
         shot("11-activities-with-routes")
 
+        // Runs' files are analysed in the background after a sync.
+        val analysedBy = System.currentTimeMillis() + 60_000
+        while (Graph.store.cache.value.runStats.size < 10 && System.currentTimeMillis() < analysedBy) {
+            Thread.sleep(100)
+            compose.waitForIdle()
+        }
+        assertTrue("runs analysed: ${Graph.store.cache.value.runStats.size}", Graph.store.cache.value.runStats.size >= 10)
+
         compose.onNodeWithText("Trends").performClick()
         waitForText("TRAINING VOLUME")
         shot("12-trends")
+        scrollTo("FITNESS & FATIGUE")
+        shot("12c-fitness")
+        scrollTo("AEROBIC EFFICIENCY")
+        shot("12d-efficiency")
+        compose.onNodeWithText("From everything synced", substring = true).performScrollTo()
+        shot("12e-recovery")
         scrollTo("RESTING HEART RATE")
         shot("13-trends-more")
 
