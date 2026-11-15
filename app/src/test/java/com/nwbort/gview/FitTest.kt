@@ -60,6 +60,20 @@ class FitTest {
     }
 
     @Test
+    fun smoothing_ignores_stops_and_follows_time_not_samples() {
+        // 3 m/s, a two-minute stop, then 3 m/s again, recorded every 5 s.
+        val recs = (0..120).map { i ->
+            val t = i * 5L
+            val stopped = t in 300..420
+            Fit.Record(t, null, null, null, if (stopped) 0.0 else 3.0, null, null)
+        }
+        val s = Fit.smoothSpeed(recs, 30)
+        assertNull("standing still has no pace", s[70])
+        assertEquals("moving either side of the stop isn't dragged down", 3.0, s[58]!!, 1e-9)
+        assertEquals(3.0, s[86]!!, 1e-9)
+    }
+
+    @Test
     fun garbage_is_not_a_fit_file() {
         assertTrue(Fit.records(ByteArray(40) { 7 }).isEmpty())
         assertNull(Fit.unzip(FitWriter.zip("hello".toByteArray(), "readme.txt")))

@@ -33,8 +33,8 @@ backups.
   and splits come from the activity's original **FIT file**, decoded on the
   phone. The last 45 days' routes download after each sync. Older ones
   download when you open them. All are kept for offline use.
-- Maps are OpenStreetMap in CARTO's light *Positron* style. Tiles are
-  cached once seen.
+- Maps are OpenStreetMap's own tiles, drawn softened to suit the app's
+  look. Tiles are cached once seen.
 - Everything is in one JSON file in the app's storage, so the app opens
   instantly and works without signal.
 

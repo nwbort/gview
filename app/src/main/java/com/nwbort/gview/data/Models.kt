@@ -150,6 +150,8 @@ data class Cache(
     val lastSync: Long? = null,
     /** The day the last full sync covered up to; the next one starts a few days before it. */
     val syncedTo: String? = null,
+    /** The day each kind of data was last fetched up to, by section name. */
+    val covered: Map<String, String> = emptyMap(),
     /** What failed on the last sync, by section ("Sleep", "HRV" ...). */
     val errors: Map<String, String> = emptyMap(),
 ) {
@@ -182,6 +184,8 @@ data class DayView(
 /** The route and recorded streams of one activity, decoded from its FIT file. */
 @Serializable
 data class Track(
+    /** How it was decoded; older versions are fetched again. See [Fit.VERSION]. */
+    val v: Int = 0,
     val lat: List<Double> = emptyList(),
     val lon: List<Double> = emptyList(),
     /** Seconds since the start, for each sample below. */

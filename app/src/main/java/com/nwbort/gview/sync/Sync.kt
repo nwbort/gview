@@ -72,8 +72,11 @@ class Sync(private val context: Context, private val store: Store, private val a
         val key = acct.apiKey ?: return Result.NotConnected
         val cache = store.cache.value
         val today = LocalDate.now()
-        val from = cache.syncedTo?.let { minOf(LocalDate.parse(it).minusDays(3), today.minusDays(7)) }
+        // Each kind of data keeps its own high-water mark, so one that failed
+        // (or is new) catches up on the whole year next time.
+        fun since(section: String): LocalDate = cache.covered[section]?.let { minOf(LocalDate.parse(it).minusDays(3), today.minusDays(7)) }
             ?: today.minusDays(HISTORY_DAYS)
+        val from = since(ACTIVITIES)
 
         // Activities first: it also proves the key works.
         val activities = try {
@@ -97,13 +100,15 @@ class Sync(private val context: Context, private val store: Store, private val a
             errors[name] = e.message ?: e.javaClass.simpleName
             null
         }
-        val summaries = section("Daily summary") { api.summaries(it, from, today) }
-        val sleep = section("Sleep") { api.sleep(it, from, today) }
-        val hrv = section("HRV") { api.hrv(it, from, today) }
+        val summaries = section(SUMMARY) { api.summaries(it, since(SUMMARY), today) }
+        val sleep = section(SLEEP) { api.sleep(it, since(SLEEP), today) }
+        val hrv = section(HRV) { api.hrv(it, since(HRV), today) }
         // The through-the-day curve only matters for the last few days.
-        val bb = section("Body Battery") { api.bodyBattery(it, maxOf(from, today.minusDays(BB_DAYS)), today) }
-        val weight = section("Weight") { api.weight(it, from, today) }
+        val bb = section("Body Battery") { api.bodyBattery(it, today.minusDays(BB_DAYS), today) }
+        val weight = section(WEIGHT) { api.weight(it, since(WEIGHT), today) }
         val fitnessAge = section("Fitness age") { api.fitnessAge(it, today) }
+        val done = mapOf(ACTIVITIES to activities, SUMMARY to summaries, SLEEP to sleep, HRV to hrv, WEIGHT to weight)
+            .filterValues { it != null }.keys.associateWith { today.toString() }
 
         val known = cache.activities.mapTo(HashSet()) { it.id }
         store.updateCache { c ->
@@ -121,6 +126,7 @@ class Sync(private val context: Context, private val store: Store, private val a
                 fitnessAge = fitnessAge ?: c.fitnessAge,
                 lastSync = System.currentTimeMillis(),
                 syncedTo = today.toString(),
+                covered = c.covered + done,
                 errors = errors,
             )
         }
@@ -139,11 +145,11 @@ class Sync(private val context: Context, private val store: Store, private val a
 
     /** The activity's route and streams: from the phone if fetched before, else from Garmin. */
     suspend fun track(activity: Activity): Track? = trackMutex.withLock {
-        store.track(activity.id)?.let { return it }
+        store.track(activity.id)?.takeIf { it.v >= Fit.VERSION }?.let { return it }
         val key = store.account.value.apiKey ?: return null
         withContext(Dispatchers.IO) {
             val bytes = withToken(key) { api.activityFile(it, activity.id) }
-            val fit = Fit.unzip(bytes) ?: return@withContext Track()
+            val fit = Fit.unzip(bytes) ?: return@withContext Track(v = Fit.VERSION)
             Fit.track(Fit.records(fit), activity.sport)
         }.also { store.saveTrack(activity.id, it) }
     }
@@ -167,6 +173,11 @@ class Sync(private val context: Context, private val store: Store, private val a
 
     companion object {
         private const val HISTORY_DAYS = 365L
+        private const val ACTIVITIES = "Activities"
+        private const val SUMMARY = "Daily summary"
+        private const val SLEEP = "Sleep"
+        private const val HRV = "HRV"
+        private const val WEIGHT = "Weight"
         private const val BB_DAYS = 6L
         private const val BB_KEEP_DAYS = 14L
         private const val PREFETCH_DAYS = 45L

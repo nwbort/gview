@@ -178,7 +178,7 @@ private fun Charts(a: Activity, t: Track) {
             val ys = t.speed.map { s ->
                 when {
                     s == null -> null
-                    pace -> if (s < 0.5) null else (1000 / s / 60).toFloat().coerceAtMost(20f) // min/km
+                    pace -> if (s < 0.5) null else (1000 / s / 60).toFloat() // min/km
                     a.sport == Sport.SWIM -> if (s < 0.2) null else (100 / s / 60).toFloat()
                     else -> (s * 3.6).toFloat()
                 }
@@ -191,6 +191,7 @@ private fun Charts(a: Activity, t: Track) {
                 tipFmt = if (inverted) { v -> minFmt(v) + if (a.sport == Sport.SWIM) " /100m" else " /km" } else { v -> "${Fmt.one(v.toDouble())} km/h" },
                 xFmt = xFmt,
                 invert = inverted,
+                robust = true,
                 description = "Pace chart",
             )
         }

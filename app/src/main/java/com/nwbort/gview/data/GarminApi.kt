@@ -36,9 +36,12 @@ open class GarminApi(private val baseUrl: String = BASE_URL) {
         return all.distinctBy { it.id }
     }
 
-    /** Daily wellness summaries, up to a year per call. */
+    /**
+     * Daily wellness summaries. Garmin allows up to a year per call, but a
+     * year in one go was turned down in practice; a quarter at a time works.
+     */
     open fun summaries(token: String, from: LocalDate, to: LocalDate): List<DaySummary> =
-        chunked(from, to, 365) { a, b -> Parse.summaries(get(token, "/usersummary-service/v2/dailysummaries", "startDate" to a, "endDate" to b)) }
+        chunked(from, to, 90) { a, b -> Parse.summaries(get(token, "/usersummary-service/v2/dailysummaries", "startDate" to a, "endDate" to b)) }
 
     /** Nightly sleep, up to 31 days per call. */
     open fun sleep(token: String, from: LocalDate, to: LocalDate): List<Sleep> =

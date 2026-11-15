@@ -150,6 +150,9 @@ object Fit {
         return v
     }
 
+    /** Bump when [track] changes, so routes decoded before are decoded again. */
+    const val VERSION = 2
+
     private const val SEMI = 180.0 / 2147483648.0
 
     /**
@@ -157,22 +160,20 @@ object Fit {
      * still draws instantly. Splits are every kilometre (5 km for rides).
      */
     fun track(records: List<Record>, sport: Sport): Track {
-        if (records.isEmpty()) return Track()
+        if (records.isEmpty()) return Track(v = VERSION)
         val t0 = records.first().time
         val pos = records.filter { it.lat != null && it.lon != null && abs(it.lat!!) <= 90 && !(it.lat == 0.0 && it.lon == 0.0) }
         val routeStep = max(1, (pos.size + 1499) / 1500)
         val route = pos.filterIndexed { i, _ -> i % routeStep == 0 || i == pos.lastIndex }
 
-        // Smooth speed over ~20 s so the pace chart reads as a trend rather than GPS noise.
-        val smooth = records.indices.map { i ->
-            val lo = max(0, i - 10); val hi = minOf(records.lastIndex, i + 10)
-            val window = (lo..hi).mapNotNull { records[it].speed }
-            if (window.isEmpty()) null else window.average()
-        }
+        // Smooth speed over a minute of time (watches record every 1-10 s), leaving out
+        // standing still, so the pace chart reads as a trend rather than GPS noise and stops.
+        val smooth = smoothSpeed(records, 30)
         val step = max(1, (records.size + 599) / 600)
         val idx = records.indices.filter { it % step == 0 || it == records.lastIndex }
 
         return Track(
+            v = VERSION,
             lat = route.map { it.lat!! },
             lon = route.map { it.lon!! },
             t = idx.map { (records[it].time - t0).toInt() },
@@ -183,6 +184,22 @@ object Fit {
             splits = splits(records, if (sport == Sport.RIDE) 5000.0 else 1000.0),
         )
     }
+
+    /** Mean moving speed within [halfWindowS] seconds either side of each record; null while stopped. */
+    fun smoothSpeed(records: List<Record>, halfWindowS: Long): List<Double?> {
+        var lo = 0; var hi = 0
+        var sum = 0.0; var n = 0
+        fun moving(r: Record) = r.speed?.takeIf { it >= MOVING }
+        return records.indices.map { i ->
+            val t = records[i].time
+            while (hi < records.size && records[hi].time <= t + halfWindowS) { moving(records[hi])?.let { sum += it; n++ }; hi++ }
+            while (records[lo].time < t - halfWindowS) { moving(records[lo])?.let { sum -= it; n-- }; lo++ }
+            if (moving(records[i]) == null || n == 0) null else sum / n
+        }
+    }
+
+    /** Below this (m/s, about 33 min/km) counts as standing still. */
+    private const val MOVING = 0.5
 
     fun splits(records: List<Record>, every: Double): List<Split> {
         val withDist = records.filter { it.dist != null }

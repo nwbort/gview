@@ -125,7 +125,7 @@ fun SettingsScreen(
                 val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull()
                 Text(
                     "gview $version. Reads your data from Garmin Connect's Personal API; it can't change anything in your account. " +
-                        "Everything synced stays on this phone. Maps © OpenStreetMap contributors, © CARTO.",
+                        "Everything synced stays on this phone. Maps © OpenStreetMap contributors.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = G.ink2,
                 )

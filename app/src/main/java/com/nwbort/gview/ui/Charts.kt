@@ -106,10 +106,22 @@ fun LineChart(
     fill: Boolean = true,
     invert: Boolean = false,
     dots: Boolean = false,
+    /** Fit the scale to the middle 96% of values and pin outliers to the edge. */
+    robust: Boolean = false,
     description: String = "",
 ) {
     val tm = rememberTextMeasurer()
     var touch by remember { mutableStateOf<Float?>(null) }
+    val clipped = remember(ys, robust) {
+        if (!robust) ys else {
+            val sorted = ys.filterNotNull().sorted()
+            if (sorted.size < 20) ys else {
+                val lo = sorted[(sorted.size * 0.02).toInt()]; val hi = sorted[(sorted.size * 0.98).toInt().coerceAtMost(sorted.lastIndex)]
+                ys.map { it?.coerceIn(lo, hi) }
+            }
+        }
+    }
+    @Suppress("NAME_SHADOWING") val ys = clipped
     val pts = xs.indices.mapNotNull { i -> ys.getOrNull(i)?.let { xs[i] to it } }
     Canvas(
         modifier.fillMaxWidth().height(height).scrub { touch = it }.semantics { contentDescription = description }

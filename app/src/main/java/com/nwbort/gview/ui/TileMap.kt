@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -69,11 +71,14 @@ object Mercator {
 }
 
 /**
- * Map tiles: CARTO's light "Positron" style of OpenStreetMap, kept on the phone
+ * Map tiles from OpenStreetMap (drawn softened to suit the app), kept on the phone
  * once fetched so maps you've looked at work offline.
  */
 class TileCache(context: Context) {
-    private val dir = File(context.cacheDir, "tiles")
+    private val dir = File(context.cacheDir, "osm-tiles").also {
+        // Tiles from the old map source said "API key required"; drop them.
+        File(context.cacheDir, "tiles").deleteRecursively()
+    }
     private val memory = LruCache<String, ImageBitmap>(96)
     private val failed = HashSet<String>()
     private val gate = Semaphore(4)
@@ -108,12 +113,12 @@ class TileCache(context: Context) {
     }
 
     private fun download(z: Int, x: Int, y: Int): ByteArray? {
-        val sub = "abcd"[(x + y) % 4]
-        val conn = URI("https://$sub.basemaps.cartocdn.com/light_all/$z/$x/$y@2x.png").toURL().openConnection() as HttpURLConnection
+        val conn = URI("https://tile.openstreetmap.org/$z/$x/$y.png").toURL().openConnection() as HttpURLConnection
         return try {
             conn.connectTimeout = 15_000
             conn.readTimeout = 20_000
-            conn.setRequestProperty("User-Agent", "gview-android/1.0")
+            // OpenStreetMap's tile policy asks apps to identify themselves.
+            conn.setRequestProperty("User-Agent", "gview/1.0 (Android; personal Garmin viewer)")
             if (conn.responseCode != 200) null else conn.inputStream.use { it.readBytes() }
         } finally {
             conn.disconnect()
@@ -164,7 +169,8 @@ fun RouteMap(track: Track, color: Color, modifier: Modifier = Modifier, interact
             if (zoom < 0 || xs.isEmpty()) return@Canvas
             version // read so new tiles redraw
             val tilePx = 256.dp.toPx()
-            val z = floor(zoom).toInt().coerceIn(0, 19)
+            // One zoom level finer than the view: OSM tiles are 256 px, so this keeps them sharp.
+            val z = (floor(zoom).toInt() + 1).coerceIn(0, 19)
             val n = 1 shl z
             val worldPx = tilePx * 2f.pow(zoom)
             val tileSize = worldPx / n
@@ -181,6 +187,7 @@ fun RouteMap(track: Track, color: Color, modifier: Modifier = Modifier, interact
                     img,
                     dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
                     dstSize = IntSize((left + tileSize).roundToInt() - left.roundToInt(), (top + tileSize).roundToInt() - top.roundToInt()),
+                    colorFilter = Soften,
                 )
             }
             val path = Path()
@@ -196,13 +203,25 @@ fun RouteMap(track: Track, color: Color, modifier: Modifier = Modifier, interact
             drawCircle(Color.White, 7.dp.toPx(), start); drawCircle(G.hrv, 4.5.dp.toPx(), start)
         }
         Text(
-            "© OpenStreetMap © CARTO",
+            "© OpenStreetMap contributors",
             color = G.ink3,
             fontSize = 9.sp,
             modifier = Modifier.align(Alignment.BottomEnd).background(Color.White.copy(alpha = 0.7f)).padding(horizontal = 4.dp, vertical = 1.dp),
         )
     }
 }
+
+/** OpenStreetMap's colours, mostly desaturated and lifted towards white: a quiet backdrop for the route. */
+private val Soften = ColorFilter.colorMatrix(ColorMatrix().apply {
+    setToSaturation(0.25f)
+    val lift = ColorMatrix(floatArrayOf(
+        0.8f, 0f, 0f, 0f, 255 * 0.2f,
+        0f, 0.8f, 0f, 0f, 255 * 0.2f,
+        0f, 0f, 0.8f, 0f, 255 * 0.19f,
+        0f, 0f, 0f, 1f, 0f,
+    ))
+    timesAssign(lift)
+})
 
 /** Just the route's shape, no map: for the activity list. */
 @Composable
