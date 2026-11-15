@@ -38,6 +38,21 @@ class AnalysisTest {
     }
 
     @Test
+    fun intervals_get_no_drift() {
+        // Two minutes hard, two easy, for an hour: HR swings with the pace.
+        val recs = (0..3600).map { s ->
+            val hard = (s / 120) % 2 == 0
+            Fit.Record(s.toLong(), null, null, null, if (hard) 4.5 else 2.5, if (hard) 170 else 140, 100.0)
+        }.let { r ->
+            var d = 0.0
+            r.map { x -> d += x.speed!!; Fit.Record(x.time, null, null, d, x.speed, x.hr, x.alt) }
+        }
+        val st = Analysis.runStats("2026-11-01", recs)!!
+        assertNull(st.driftPct)
+        assertTrue(!st.steady)
+    }
+
+    @Test
     fun climbing_counts_for_more_than_its_pace() {
         // A steady 5% climb: 3 m/s up it is worth more on the flat.
         val climb = Analysis.runStats("2026-11-01", run({ 150 }, alt = { it * 3.0 * 0.05 }))!!

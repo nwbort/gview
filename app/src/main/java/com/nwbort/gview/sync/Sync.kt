@@ -157,6 +157,8 @@ class Sync(private val context: Context, private val store: Store, private val a
             .take(PREFETCH_MAX)
             .forEach { a -> runCatching { track(a) } }
         // Then work through older runs' files for efficiency and drift, a batch per sync.
+        // When the analysis itself has changed, every run is gone over again.
+        if (store.cache.value.analysedWith != Fit.VERSION) store.updateCache { it.copy(analysed = emptySet(), analysedWith = Fit.VERSION) }
         val c = store.cache.value
         c.sortedActivities
             .filter { it.sport == com.nwbort.gview.data.Sport.RUN && it.id !in c.analysed }
@@ -191,6 +193,18 @@ class Sync(private val context: Context, private val store: Store, private val a
             }
         }
     }
+
+    /** Garmin's own JSON for an activity: (list entry, detail), pretty-printed. */
+    suspend fun raw(activity: Activity): Pair<String, String> {
+        val key = store.account.value.apiKey ?: throw IOException("Not connected")
+        val (entry, detail) = withContext(Dispatchers.IO) { withToken(key) { api.rawActivity(it, activity.id, activity.date) } }
+        return pretty(entry) to pretty(detail)
+    }
+
+    private fun pretty(json: String): String = runCatching {
+        val pj = kotlinx.serialization.json.Json { prettyPrint = true }
+        pj.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), pj.parseToJsonElement(json))
+    }.getOrDefault(json)
 
     /** Runs [call] with a cached token, getting a fresh one when it's near expiry or turned down. */
     private suspend fun <T> withToken(key: String, call: (String) -> T): T = try {

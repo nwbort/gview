@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +49,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.nwbort.gview.data.Activity
 import com.nwbort.gview.data.Analysis
 import com.nwbort.gview.data.RunStats
@@ -71,7 +73,7 @@ private fun rememberTrack(a: Activity, vm: AppViewModel): TrackState {
 }
 
 @Composable
-fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () -> Unit) {
+fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () -> Unit, onRaw: () -> Unit) {
     val state = rememberTrack(a, vm)
     val cache by vm.cache.collectAsStateWithLifecycle()
     val track = (state as? TrackState.Ready)?.track
@@ -106,6 +108,11 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
                     Spacer(Modifier.width(8.dp))
                     Text("Open in Garmin Connect", color = G.ink2)
                 }
+                TextButton(onClick = onRaw) {
+                    Icon(Icons.Outlined.DataObject, contentDescription = null, tint = G.ink2, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Garmin's raw data", color = G.ink2)
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
@@ -132,6 +139,7 @@ private fun Effort(a: Activity, st: RunStats, all: Collection<RunStats>) {
             buildString {
                 append("Grade-adjusted pace is your pace as if the hills were flat. ")
                 if (eff != null && ref != null) append("Pace at $ref bpm is how fast that effort would be at your typical running heart rate: faster over the months means fitter. ")
+                if (drift == null && !st.steady) append("HR drift isn't shown: pace changed too much (intervals, repeats or a tempo block) for it to mean anything.")
                 if (drift != null) append(
                     when {
                         drift < 5 -> "HR held steady through the second half (under 5% drift): well within your aerobic range."
@@ -425,6 +433,45 @@ fun FullMapScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit) {
                         Text(s.highLabel ?: s.tipFmt(hi), style = MaterialTheme.typography.bodySmall, color = G.ink3)
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Exactly what Garmin sent for this activity, to see which fields are there. Selectable and copyable. */
+@Composable
+fun RawDataScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit) {
+    val raw by produceState<Pair<String, String>?>(null, a.id) { value = vm.raw(a) }
+    val context = LocalContext.current
+    Column(Modifier.fillMaxSize().background(G.paper).statusBarsPadding()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, top = 4.dp)) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back", tint = G.ink) }
+            Text("Garmin's raw data", style = MaterialTheme.typography.headlineSmall, color = G.ink, modifier = Modifier.weight(1f))
+            raw?.let { (entry, detail) ->
+                TextButton(onClick = {
+                    context.getSystemService(android.content.ClipboardManager::class.java)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("Garmin activity", "LIST ENTRY\n$entry\n\nDETAIL\n$detail"))
+                }) { Text("Copy", color = G.ink2) }
+            }
+        }
+        val r = raw
+        if (r == null) {
+            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = G.ink2, strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+            }
+            return@Column
+        }
+        androidx.compose.foundation.text.selection.SelectionContainer(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
+        ) {
+            Column {
+                Text("Activity list entry", style = MaterialTheme.typography.titleMedium, color = G.ink, modifier = Modifier.padding(vertical = 8.dp))
+                Text(r.first, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp, color = G.ink2)
+                if (r.second.isNotEmpty()) {
+                    Text("Activity detail", style = MaterialTheme.typography.titleMedium, color = G.ink, modifier = Modifier.padding(top = 20.dp, bottom = 8.dp))
+                    Text(r.second, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp, color = G.ink2)
+                }
+                Spacer(Modifier.height(32.dp))
             }
         }
     }

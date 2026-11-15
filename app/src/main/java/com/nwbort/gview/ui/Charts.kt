@@ -167,7 +167,7 @@ fun LineChart(
         fun py(y: Float): Float { val f = (y - lo) / (hi - lo); return topPad + (if (invert) f else 1 - f) * h }
 
         // Recessive grid with labels at the left.
-        niceTicks(lo, hi).forEach { v ->
+        niceTicks(lo, hi, 4).forEach { v ->
             val y = py(v)
             drawLine(G.line, Offset(leftPad, y), Offset(size.width, y), 1.dp.toPx())
             val l = tm.measure(yFmt(v), axisText)

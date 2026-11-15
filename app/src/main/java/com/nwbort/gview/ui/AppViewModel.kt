@@ -68,6 +68,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Garmin's own JSON for an activity, or the error that stopped it. */
+    suspend fun raw(a: Activity): Pair<String, String> = try { Graph.sync.raw(a) } catch (e: Exception) {
+        val msg = "Couldn't fetch it: ${e.message ?: e.javaClass.simpleName}"
+        msg to ""
+    }
+
     /** An activity's route and streams, fetched from Garmin the first time. */
     suspend fun track(a: Activity): Track? = runCatching { Graph.sync.track(a) }.getOrNull()
 }

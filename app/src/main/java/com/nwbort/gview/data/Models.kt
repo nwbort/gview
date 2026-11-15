@@ -158,6 +158,8 @@ data class Cache(
     val runStats: Map<Long, RunStats> = emptyMap(),
     /** Runs whose files have been looked at (some have nothing to say: too short, no HR). */
     val analysed: Set<Long> = emptySet(),
+    /** The [Fit.VERSION] those runs were analysed with; a newer one analyses them again. */
+    val analysedWith: Int = 0,
     /** How many years back to sync, from Settings. */
     val historyYears: Int = 1,
     /** What failed on the last sync, by section ("Sleep", "HRV" ...). */

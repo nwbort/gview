@@ -61,6 +61,19 @@ open class GarminApi(private val baseUrl: String = BASE_URL) {
     open fun fitnessAge(token: String, date: LocalDate): Double? =
         Parse.fitnessAge(get(token, "/fitnessage-service/fitnessage/v2/$date"))
 
+    /**
+     * Exactly what Garmin sends for one activity, for checking what's there:
+     * its entry in the activity list, and its detail record.
+     */
+    open fun rawActivity(token: String, id: Long, date: LocalDate): Pair<String, String> {
+        val list = get(token, "/activitylist-service/activities/search/activities", "start" to 0, "limit" to 50, "startDate" to date, "endDate" to date)
+        val entry = runCatching {
+            (kotlinx.serialization.json.Json.parseToJsonElement(list) as kotlinx.serialization.json.JsonArray)
+                .firstOrNull { (it as? kotlinx.serialization.json.JsonObject)?.get("activityId")?.toString() == id.toString() }?.toString()
+        }.getOrNull() ?: list
+        return entry to get(token, "/activity-service/activity/$id")
+    }
+
     /** The activity's original file: a ZIP holding a FIT file. */
     open fun activityFile(token: String, id: Long): ByteArray =
         request("GET", "/download-service/files/activity/$id", "Bearer $token", "application/zip, application/x-zip-compressed, application/octet-stream")

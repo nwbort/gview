@@ -25,6 +25,8 @@ data class RunStats(
      * bought in the second half than the first, percent. Null for short runs.
      */
     val driftPct: Double? = null,
+    /** False when pace varied too much (intervals, repeats) for drift to mean anything. */
+    val steady: Boolean = true,
 ) {
     /** Grade-adjusted metres per minute per beat: higher is fitter. */
     val efficiency: Double? get() = if (gapMps != null && avgHr != null && avgHr > 60) gapMps * 60 / avgHr else null
@@ -88,6 +90,15 @@ object Analysis {
             val afterWarmup = mutableListOf<Int>()
             for (i in moving) { elapsed += dt[i]; if (elapsed > 10 * 60) afterWarmup += i }
             val total = afterWarmup.sumOf { dt[it] }
+            // Only a steady run says anything about drift: intervals, hill repeats and
+            // tempo blocks change heart rate for reasons of their own. Steady here means
+            // grade-adjusted pace within about 12% across 2-minute blocks.
+            val blocks = mutableListOf<Double>()
+            var bt = 0.0; var bd = 0.0
+            for (i in afterWarmup) { bt += dt[i]; bd += gap[i]!! * dt[i]; if (bt >= 120) { blocks += bd / bt; bt = 0.0; bd = 0.0 } }
+            val mean = blocks.average()
+            val cv = if (blocks.size < 8) 1.0 else kotlin.math.sqrt(blocks.sumOf { (it - mean) * (it - mean) } / blocks.size) / mean
+            if (cv > STEADY_CV) return RunStats(date, movingS, gapMps, avgHr, null, steady = false)
             var acc = 0.0
             val first = mutableListOf<Int>(); val second = mutableListOf<Int>()
             for (i in afterWarmup) { (if (acc < total / 2) first else second) += i; acc += dt[i] }
@@ -104,6 +115,7 @@ object Analysis {
     }
 
     private const val MOVING = 0.5
+    private const val STEADY_CV = 0.12
 
     // ---------------- Training load: fitness, fatigue, form ----------------
 

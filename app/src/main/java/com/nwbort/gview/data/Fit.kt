@@ -151,7 +151,7 @@ object Fit {
     }
 
     /** Bump when [track] changes, so routes decoded before are decoded again. */
-    const val VERSION = 4
+    const val VERSION = 5
 
     private const val SEMI = 180.0 / 2147483648.0
 

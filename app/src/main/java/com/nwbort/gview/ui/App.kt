@@ -47,6 +47,7 @@ enum class Tab(val label: String) { TODAY("Today"), ACTIVITIES("Activities"), TR
 sealed interface Screen {
     data class ActivityDetail(val id: Long) : Screen
     data class FullMap(val id: Long) : Screen
+    data class RawData(val id: Long) : Screen
     data class MetricDetail(val metric: Metric) : Screen
     data object Settings : Screen
 }
@@ -84,11 +85,15 @@ fun GviewRoot(vm: AppViewModel) {
         when (top) {
             is Screen.ActivityDetail -> {
                 val a = cache.activities.firstOrNull { it.id == top.id }
-                if (a == null) LaunchedEffect(Unit) { back() } else ActivityScreen(a, vm, onBack = back, onMap = { open(Screen.FullMap(a.id)) })
+                if (a == null) LaunchedEffect(Unit) { back() } else ActivityScreen(a, vm, onBack = back, onMap = { open(Screen.FullMap(a.id)) }, onRaw = { open(Screen.RawData(a.id)) })
             }
             is Screen.FullMap -> {
                 val a = cache.activities.firstOrNull { it.id == top.id }
                 if (a == null) LaunchedEffect(Unit) { back() } else FullMapScreen(a, vm, onBack = back)
+            }
+            is Screen.RawData -> {
+                val a = cache.activities.firstOrNull { it.id == top.id }
+                if (a == null) LaunchedEffect(Unit) { back() } else RawDataScreen(a, vm, onBack = back)
             }
             is Screen.MetricDetail -> MetricScreen(top.metric, cache, onBack = back)
             Screen.Settings -> SettingsScreen(account, cache, syncing, onSync = vm::sync, onHistory = vm::setHistory, onConnect = vm::connect, onDisconnect = { vm.disconnect(); stack.clear() }, onBack = back)
