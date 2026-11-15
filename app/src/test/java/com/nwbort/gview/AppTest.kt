@@ -78,6 +78,8 @@ class AppTest {
         shot("03-today")
         scrollTo("MOVEMENT")
         shot("04-today-more")
+        scrollTo("HEART RATE")
+        shot("04b-today-heart")
         scrollTo("STRESS")
         shot("05-today-end")
 

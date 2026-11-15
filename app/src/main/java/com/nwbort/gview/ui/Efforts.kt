@@ -36,7 +36,7 @@ fun distanceName(m: Int): String = when (m) {
 
 /** Time in each heart-rate zone as one bar, with each zone's share. */
 @Composable
-fun ZonesBar(seconds: List<Double>) {
+fun ZonesBar(seconds: List<Double>, zones: com.nwbort.gview.data.HrZones? = null) {
     val total = seconds.sum()
     if (total <= 0) return
     Segments(seconds.mapIndexed { i, s -> s.toFloat() to G.zones[i] }, height = 14.dp)
@@ -47,6 +47,7 @@ fun ZonesBar(seconds: List<Double>) {
                 Legend(G.zones[i], "Z${i + 1}", "")
                 Text("${(s / total * 100).roundToInt()}%", style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"), color = G.ink)
                 Text(Fmt.hm(s), style = MaterialTheme.typography.bodySmall, color = G.ink3)
+                zones?.range(i)?.let { Text(it, style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"), color = G.ink3) }
             }
         }
     }
@@ -54,13 +55,27 @@ fun ZonesBar(seconds: List<Double>) {
 
 /** An activity's heart-rate zones. */
 @Composable
-fun ActivityZones(a: Activity) {
+fun ActivityZones(a: Activity, zones: com.nwbort.gview.data.HrZones?) {
     if (a.hrZones.sum() <= 0) return
     Panel {
         Label("Heart-rate zones", G.heart)
         Spacer(Modifier.height(10.dp))
-        ZonesBar(a.hrZones)
+        ZonesBar(a.hrZones, zones)
+        zones?.let { ZonesNote(it) }
     }
+}
+
+/** How the zones are set, so the bpm figures make sense. */
+@Composable
+private fun ZonesNote(z: com.nwbort.gview.data.HrZones) {
+    val how = when (z.method) {
+        "LACTATE_THRESHOLD" -> "from your lactate threshold" + (z.threshold?.let { " ($it bpm)" } ?: "")
+        "HR_RESERVE" -> "from your heart-rate reserve" + (if (z.resting != null && z.max != null) " (${z.resting}–${z.max} bpm)" else "")
+        "HR_MAX" -> "from your max heart rate" + (z.max?.let { " ($it bpm)" } ?: "")
+        else -> "as you set them in Garmin Connect"
+    }
+    Spacer(Modifier.height(8.dp))
+    Text("Zones in bpm, $how.", style = MaterialTheme.typography.bodySmall, color = G.ink3)
 }
 
 /** Garmin's fastest stretches within this run, marked where they're your best ever. */
@@ -146,7 +161,7 @@ fun ZonesCard(cache: Cache, range: Range) {
             Text("· ${(100 - easy).roundToInt()}% moderate to hard", style = MaterialTheme.typography.bodyMedium, color = G.ink2, modifier = Modifier.padding(bottom = 6.dp))
         }
         Spacer(Modifier.height(10.dp))
-        ZonesBar(zones)
+        ZonesBar(zones, cache.hrZones)
         Spacer(Modifier.height(10.dp))
         Text(
             "Easy is zones 1–2. Endurance plans usually aim for about 80% easy; much less means the easy days aren't easy enough.",

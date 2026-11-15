@@ -119,6 +119,12 @@ class Sync(private val context: Context, private val store: Store, private val a
         val bb = section("Body Battery") { api.bodyBattery(it, today.minusDays(BB_DAYS), today) }
         val weight = section(WEIGHT) { both(WEIGHT, it, api::weight) }
         val fitnessAge = section("Fitness age") { api.fitnessAge(it, today) }
+        val zones = section("Heart-rate zones") { api.hrZones(it) }
+        // Heart rate through the day: today and yesterday always (still filling in), and any
+        // other day of the last week that's missing. One call per day.
+        val hrDays = (0L until HR_DAYS).map { today.minusDays(it) }
+            .filter { it >= today.minusDays(1) || cache.heartRate[it.toString()] == null }
+        val hr = section("Heart rate") { t -> hrDays.mapNotNull { api.heartRate(t, it) } }
         val synced = mapOf(ACTIVITIES to activities, SUMMARY to summaries, SLEEP to sleep, HRV to hrv, WEIGHT to weight)
             .filterValues { it != null }.keys
         val done = synced.associateWith { today.toString() }
@@ -140,6 +146,9 @@ class Sync(private val context: Context, private val store: Store, private val a
                 bodyBattery = (c.bodyBattery + bb.orEmpty().associateBy { it.date })
                     .filterKeys { it >= today.minusDays(BB_KEEP_DAYS).toString() },
                 weight = (c.weight + weight.orEmpty().associateBy { it.date }).recent(),
+                heartRate = (c.heartRate + hr.orEmpty().associateBy { it.date })
+                    .filterKeys { it >= today.minusDays(BB_KEEP_DAYS).toString() },
+                hrZones = zones ?: c.hrZones,
                 fitnessAge = fitnessAge ?: c.fitnessAge,
                 lastSync = System.currentTimeMillis(),
                 syncedTo = today.toString(),
@@ -237,6 +246,7 @@ class Sync(private val context: Context, private val store: Store, private val a
         private const val HRV = "HRV"
         private const val WEIGHT = "Weight"
         private const val BB_DAYS = 6L
+        private const val HR_DAYS = 7L
         private const val BB_KEEP_DAYS = 14L
         private const val PREFETCH_DAYS = 45L
         private const val PREFETCH_MAX = 25

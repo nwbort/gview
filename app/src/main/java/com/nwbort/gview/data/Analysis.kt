@@ -144,8 +144,10 @@ object Analysis {
     fun loadCurve(c: Cache, today: LocalDate = LocalDate.now()): List<LoadDay> {
         val acts = c.activities
         if (acts.isEmpty()) return emptyList()
-        val rest = c.summaries.values.mapNotNull { it.restingHr?.takeIf { r -> r > 0 } }.let { if (it.isEmpty()) 50.0 else it.average() }
-        val maxHr = (acts.mapNotNull { it.maxHr }.maxOrNull() ?: 185.0).coerceAtLeast(rest + 40)
+        // The max and resting HR your zones are set from, where Garmin has them.
+        val rest = c.hrZones?.resting?.toDouble()
+            ?: c.summaries.values.mapNotNull { it.restingHr?.takeIf { r -> r > 0 } }.let { if (it.isEmpty()) 50.0 else it.average() }
+        val maxHr = (c.hrZones?.max?.toDouble() ?: acts.mapNotNull { it.maxHr }.maxOrNull() ?: 185.0).coerceAtLeast(rest + 40)
         val byDay = acts.groupBy { it.date }.mapValues { (_, l) -> l.sumOf { load(it, rest, maxHr) } }
         var fit = 0.0; var fat = 0.0
         val out = mutableListOf<LoadDay>()

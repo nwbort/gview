@@ -5,7 +5,7 @@ activities and trends, synced from Garmin Connect and kept on the phone.
 
 | Tab | What's there |
 | --- | --- |
-| **Today** | Body Battery, sleep score, HRV and resting heart rate, each with its last two weeks. Below: last night's sleep and its stages, Body Battery through the day, steps and movement, stress, and the day's activities. Swipe (or use the arrows) for earlier days. |
+| **Today** | Body Battery, sleep score, HRV and resting heart rate, each with its last two weeks. Below: last night's sleep and its stages, Body Battery through the day with what charged and drained it (sleep +58, run −21…), heart rate through the day, steps and movement, stress, and the day's activities. Swipe (or use the arrows) for earlier days. |
 | **Activities** | Everything synced, by week with weekly totals, filterable by sport. Each one shows its route's shape. Tap for the route on a map, pace, heart rate and elevation charts, kilometre splits (5 km for rides), and the rest of Garmin's numbers. |
 | **Map** | Tap an activity's map for it full screen: pinch and pan, with one chart along the bottom (pace, heart rate or elevation). The route is coloured by whichever is shown, and dragging along the chart moves a dot along the route. |
 | **Trends** | Training volume by week or day, and sleep, HRV (with your balanced range), Body Battery, resting heart rate, steps, stress, VO₂ max and weight over 4 weeks, 3 months, a year or everything synced. Drag across any chart to read values; tap a card for more. |
@@ -29,7 +29,8 @@ activities and trends, synced from Garmin Connect and kept on the phone.
   better or worse sleep (evening workouts, stressful days, hard days). Only
   what the data clearly shows is listed.
 
-- **Heart-rate zones.** Each activity shows its time in zones 1–5, and
+- **Heart-rate zones.** Each activity shows its time in zones 1–5 with
+  each zone's bpm range from your Garmin zone settings, and
   Trends adds up the range: how much was easy (zones 1–2) against the
   usual ~80% easy for endurance training.
 - **Personal bests.** Garmin's fastest 1 km, mile, 5 km, 10 km (and longer)

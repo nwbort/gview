@@ -58,6 +58,12 @@ open class GarminApi(private val baseUrl: String = BASE_URL) {
     open fun weight(token: String, from: LocalDate, to: LocalDate): List<Weight> =
         Parse.weights(get(token, "/weight-service/weight/range/$from/$to", "includeAll" to false))
 
+    open fun heartRate(token: String, date: LocalDate): HrCurve? =
+        Parse.heartRate(get(token, "/wellness-service/wellness/dailyHeartRate", "date" to date), date)
+
+    open fun hrZones(token: String): HrZones? =
+        Parse.hrZones(get(token, "/biometric-service/heartRateZones/v2", "generateDefaults" to true))
+
     open fun fitnessAge(token: String, date: LocalDate): Double? =
         Parse.fitnessAge(get(token, "/fitnessage-service/fitnessage/v2/$date"))
 

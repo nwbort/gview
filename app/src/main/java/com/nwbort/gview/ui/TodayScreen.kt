@@ -1,5 +1,7 @@
 package com.nwbort.gview.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -105,6 +107,7 @@ private fun DayPage(cache: Cache, day: DayView, syncing: Boolean, onActivity: (L
         day.sleep?.let { SleepCard(it) { onMetric(Metric.SLEEP) } }
         day.summary?.let { s ->
             if (day.bb != null || s.bbMax != null) BatteryCard(day) { onMetric(Metric.BODY_BATTERY) }
+            if (day.hr != null) HeartCard(day) { onMetric(Metric.RESTING_HR) }
             if (s.steps != null) MovementCard(day) { onMetric(Metric.STEPS) }
             if (s.stressAvg != null) StressCard(day) { onMetric(Metric.STRESS) }
         }
@@ -200,11 +203,83 @@ private fun BatteryCard(day: DayView, onClick: () -> Unit) {
                 height = 140.dp,
                 yMin = 0f,
                 yMax = 100f,
-                xFmt = { m -> "%d:%02d".format(m.toInt() / 60, m.toInt() % 60) },
-                xLabels = listOf(0f to "12am", 360f to "6am", 720f to "12pm", 1080f to "6pm", 1439f to "12am"),
+                xFmt = { m -> java.time.LocalTime.of(m.toInt() / 60 % 24, m.toInt() % 60).format(clock).lowercase() },
+                xLabels = listOf(0f to "12am", 360f to "6am", 720f to "12pm", 1080f to "6pm", 1440f to "12am"),
+                xMin = 0f, xMax = 1440f,
                 description = "Body Battery through the day",
             )
         }
+        val events = s?.bbEvents.orEmpty().filter { it.impact != 0 }
+        if (events.isNotEmpty()) {
+            Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                events.forEach { e -> BbEventRow(e) }
+            }
+        }
+    }
+}
+
+/** "6:12 am  ·  Run  ·  1h 32m          −21" */
+@Composable
+private fun BbEventRow(e: com.nwbort.gview.data.BbEvent) {
+    val color = when (e.type) {
+        "SLEEP", "NAP" -> G.sleep
+        "ACTIVITY" -> G.steps
+        "STRESS" -> G.stress
+        "RECOVERY" -> G.hrv
+        else -> G.ink3
+    }
+    val name = e.name?.takeIf { it.isNotBlank() } ?: when (e.type) {
+        "SLEEP" -> "Sleep"; "NAP" -> "Nap"; "STRESS" -> "Stress"; "RECOVERY" -> "Rest"; "ACTIVITY" -> "Activity"
+        else -> Fmt.titleCase(e.type)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(8.dp).clip(androidx.compose.foundation.shape.CircleShape).background(color))
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(name, style = MaterialTheme.typography.bodyMedium, color = G.ink, maxLines = 1)
+            val bits = listOfNotNull(
+                e.startMin?.let { m -> val mm = ((m % 1440) + 1440) % 1440; java.time.LocalTime.of(mm / 60, mm % 60).format(clock).lowercase() },
+                e.minutes?.takeIf { it > 0 }?.let { Fmt.hm(it * 60.0) },
+            )
+            if (bits.isNotEmpty()) Text(bits.joinToString("  ·  "), style = MaterialTheme.typography.bodySmall, color = G.ink3)
+        }
+        Text(
+            (if (e.impact > 0) "+" else "−") + kotlin.math.abs(e.impact),
+            style = MaterialTheme.typography.titleMedium.copy(fontFeatureSettings = "tnum"),
+            color = if (e.impact > 0) G.hrv else G.ink2,
+        )
+    }
+}
+
+/** Heart rate through the day, with the day's resting, low and high. */
+@Composable
+private fun HeartCard(day: DayView, onClick: () -> Unit) {
+    val hr = day.hr ?: return
+    val s = day.summary
+    Panel(onClick = onClick) {
+        Label("Heart rate", G.heart)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Value(s?.restingHr?.takeIf { it > 0 }?.toString() ?: "–", "resting", style = MaterialTheme.typography.displaySmall)
+            Spacer(Modifier.weight(1f))
+            Text(
+                listOfNotNull(s?.minHr?.let { "Low $it" }, s?.maxHr?.let { "High $it" }).joinToString("  ·  "),
+                style = MaterialTheme.typography.bodyMedium, color = G.ink2, modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        LineChart(
+            xs = hr.minutes.map { it.toFloat() },
+            ys = hr.bpm.map { it.toFloat() },
+            color = G.heart,
+            height = 140.dp,
+            tipFmt = { "${it.toInt()} bpm" },
+            xFmt = { m -> java.time.LocalTime.of(m.toInt() / 60 % 24, m.toInt() % 60).format(clock).lowercase() },
+            xLabels = listOf(0f to "12am", 360f to "6am", 720f to "12pm", 1080f to "6pm", 1440f to "12am"),
+                xMin = 0f, xMax = 1440f,
+            description = "Heart rate through the day",
+        )
     }
 }
 

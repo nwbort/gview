@@ -116,7 +116,64 @@ object Parse {
             intensityGoal = im?.int("goal"),
             spo2 = d.obj("pulseOx")?.let { it.num("avgValue") ?: it.num("averageValue") },
             respiration = d.obj("respiration")?.let { it.num("avgWakingValue") ?: it.num("averageWakingValue") },
+            bbEvents = (bb?.get("activityEvents") as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.bbEvent(date) }
+                .sortedBy { it.startMin ?: 0 },
         )
+    }
+
+    private fun JsonObject.bbEvent(date: String): BbEvent? {
+        val impact = int("bodyBatteryImpact") ?: return null
+        val start = time("eventStartTimeLocal")?.let { ms ->
+            val t = LocalDateTime.ofEpochSecond(ms / 1000, 0, ZoneOffset.UTC)
+            val days = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.parse(date), t.toLocalDate())
+            (days * 1440 + t.hour * 60 + t.minute).toInt()
+        }
+        return BbEvent(
+            type = str("eventType") ?: "OTHER",
+            name = str("activityName"),
+            startMin = start,
+            minutes = (num("durationInMillis") ?: num("durationInMilliseconds"))?.let { (it / 60000).toInt() },
+            impact = impact,
+        )
+    }
+
+    // --- Heart rate through the day ---
+
+    /** All-day heart rate, in the phone's time zone, as about one point per 5 minutes. */
+    fun heartRate(body: String, date: LocalDate, zone: java.time.ZoneId = java.time.ZoneId.systemDefault()): HrCurve? {
+        val r = root(body) as? JsonObject ?: return null
+        val cols = (r["heartRateValueDescriptors"] as? JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        val ti = cols.firstOrNull { it.str("key") == "timestamp" }?.int("index") ?: 0
+        val hi = cols.firstOrNull { it.str("key") == "heartrate" }?.int("index") ?: 1
+        val rows = (r["heartRateValues"] as? JsonArray).orEmpty()
+        val buckets = sortedMapOf<Int, MutableList<Int>>()
+        rows.forEach { row ->
+            val a = row as? JsonArray ?: return@forEach
+            val ts = (a.getOrNull(ti) as? JsonPrimitive)?.longOrNull ?: return@forEach
+            val bpm = (a.getOrNull(hi) as? JsonPrimitive)?.doubleOrNull?.toInt()?.takeIf { it > 0 } ?: return@forEach
+            val t = java.time.Instant.ofEpochMilli(ts).atZone(zone)
+            if (t.toLocalDate() != date) return@forEach
+            buckets.getOrPut((t.hour * 60 + t.minute) / 5 * 5) { mutableListOf() } += bpm
+        }
+        if (buckets.size < 2) return null
+        return HrCurve(date.toString(), buckets.keys.toList(), buckets.values.map { it.average().toInt() })
+    }
+
+    // --- Heart-rate zones ---
+
+    fun hrZones(body: String): HrZones? {
+        val all = list(body).mapNotNull { z ->
+            val floors = (1..5).map { z.int("zone${it}Floor") ?: return@mapNotNull null }
+            (z.str("sport") ?: "DEFAULT") to HrZones(
+                floors = floors,
+                max = z.int("maxHeartRateUsed"),
+                resting = z.int("restingHeartRateUsed"),
+                threshold = z.int("lactateThresholdHeartRateUsed"),
+                method = z.str("trainingMethod"),
+            )
+        }.toMap()
+        // Running's own zones if set, else the default ones.
+        return all["RUNNING"] ?: all["DEFAULT"] ?: all.values.firstOrNull()
     }
 
     // --- Sleep ---

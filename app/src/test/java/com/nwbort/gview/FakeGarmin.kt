@@ -90,6 +90,12 @@ class FakeGarmin(private val today: LocalDate = LocalDate.now()) : GarminApi("ht
                 restP = 0.42, lowP = 0.31, mediumP = 0.18, highP = 0.09,
                 bbMax = bbMax, bbMin = (bbMax - 60).coerceAtLeast(8), bbCharged = 66, bbDrained = 61, bbLatest = if (d == today) 54 else bbMax - 58,
                 activeKcal = 520 + (300 * noise(d, 12)).roundToInt(), totalKcal = 2400, moderateMin = 22, vigorousMin = 31, intensityGoal = 150,
+                bbEvents = listOfNotNull(
+                    com.nwbort.gview.data.BbEvent("SLEEP", startMin = -85, minutes = 465, impact = 58),
+                    activityOn(d)?.let { a -> com.nwbort.gview.data.BbEvent("ACTIVITY", a.name, a.startTime.hour * 60 + a.startTime.minute, ((a.timeS ?: 0.0) / 60).toInt(), -((a.timeS ?: 0.0) / 300).roundToInt().coerceAtMost(30)) },
+                    com.nwbort.gview.data.BbEvent("STRESS", startMin = 14 * 60 + 10, minutes = 95, impact = -9),
+                    com.nwbort.gview.data.BbEvent("RECOVERY", startMin = 20 * 60 + 30, minutes = 40, impact = 3),
+                ),
             )
         }
     }
@@ -136,6 +142,25 @@ class FakeGarmin(private val today: LocalDate = LocalDate.now()) : GarminApi("ht
     }
 
     override fun fitnessAge(token: String, date: LocalDate): Double = 31.0
+
+    override fun hrZones(token: String) = com.nwbort.gview.data.HrZones(
+        floors = listOf(97, 116, 136, 155, 174), max = 192, resting = 48, threshold = 172, method = "LACTATE_THRESHOLD",
+    )
+
+    /** Asleep low, a morning run spike, a quiet desk day, a walk in the evening. */
+    override fun heartRate(token: String, date: LocalDate): com.nwbort.gview.data.HrCurve {
+        val upTo = if (date == today) 600 else 1440
+        val mins = (0 until upTo step 5).toList()
+        return com.nwbort.gview.data.HrCurve(date.toString(), mins, mins.map { m ->
+            val h = m / 60.0
+            (when {
+                h < 6.2 -> 50 + 3 * sin(m / 37.0)
+                h < 7.8 && activityOn(date)?.start?.substring(11, 13) == "06" -> 135 + 15 * sin(m / 9.0)
+                h < 22.5 -> 68 + 8 * sin(m / 23.0) + 6 * noise(date, m)
+                else -> 56.0
+            }).roundToInt()
+        })
+    }
 
     /** A loop around a park, sized to the activity, as a zipped FIT file. */
     override fun activityFile(token: String, id: Long): ByteArray {

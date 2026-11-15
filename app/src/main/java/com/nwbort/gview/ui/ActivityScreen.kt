@@ -100,7 +100,7 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
                 }
                 Hero(a)
                 Details(a)
-                ActivityZones(a)
+                ActivityZones(a, cache.hrZones)
                 ActivityBests(a, cache)
                 track?.stats?.let { Effort(a, it, cache.runStats.values) }
                 if (track != null) Charts(a, track)

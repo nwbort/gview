@@ -120,6 +120,45 @@ class ParseTest {
     }
 
     @Test
+    fun heart_rate_zones_prefer_running() {
+        val z = Parse.hrZones(
+            """[{"trainingMethod":"HR_MAX","zone1Floor":95,"zone2Floor":114,"zone3Floor":133,"zone4Floor":152,"zone5Floor":171,"maxHeartRateUsed":190,"sport":"DEFAULT"},
+               {"trainingMethod":"LACTATE_THRESHOLD","zone1Floor":97,"zone2Floor":116,"zone3Floor":136,"zone4Floor":155,"zone5Floor":174,
+                "maxHeartRateUsed":192,"lactateThresholdHeartRateUsed":172,"restingHeartRateUsed":48,"sport":"RUNNING"}]"""
+        )!!
+        assertEquals(listOf(97, 116, 136, 155, 174), z.floors)
+        assertEquals("116–135", z.range(1))
+        assertEquals("174–192", z.range(4))
+        assertEquals(172, z.threshold)
+    }
+
+    @Test
+    fun heart_rate_through_the_day_in_local_time() {
+        // 21:00 and 21:02 UTC on the 13th are 8:00 and 8:02 on the 14th in Sydney: one 5-minute point.
+        val c = Parse.heartRate(
+            """{"heartRateValueDescriptors":[{"index":0,"key":"timestamp"},{"index":1,"key":"heartrate"}],
+               "heartRateValues":[[1794603600000,60],[1794603720000,64],[1794607200000,null],[1794607200000,72]]}""",
+            java.time.LocalDate.of(2026, 11, 14), java.time.ZoneId.of("Australia/Sydney"),
+        )!!
+        assertEquals(listOf(480, 540), c.minutes)
+        assertEquals(listOf(62, 72), c.bpm)
+    }
+
+    @Test
+    fun body_battery_events_from_the_daily_summary() {
+        val s = Parse.summaries(
+            """{"data":[{"calendarDate":"2026-11-12","bodyBattery":{"maxValue":80,"activityEvents":[
+               {"eventType":"ACTIVITY","activityName":"Sydney Running","eventStartTimeLocal":"2026-11-12T05:54:55.0","bodyBatteryImpact":-21,"durationInMillis":5571000},
+               {"eventType":"SLEEP","eventStartTimeLocal":"2026-11-11T22:10:00.0","bodyBatteryImpact":54,"durationInMillis":26400000}]}}]}"""
+        ).single()
+        assertEquals(listOf("SLEEP", "ACTIVITY"), s.bbEvents.map { it.type })
+        assertEquals(-110, s.bbEvents[0].startMin) // 10:10 pm the night before
+        assertEquals(354, s.bbEvents[1].startMin)
+        assertEquals(-21, s.bbEvents[1].impact)
+        assertEquals(92, s.bbEvents[1].minutes)
+    }
+
+    @Test
     fun junk_is_skipped_not_fatal() {
         assertTrue(Parse.activities("<html>oops</html>").isEmpty())
         assertTrue(Parse.summaries("{}").isEmpty())

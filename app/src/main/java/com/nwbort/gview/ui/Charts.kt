@@ -103,6 +103,9 @@ fun LineChart(
     xLabels: List<Pair<Float, String>>? = null,
     yMin: Float? = null,
     yMax: Float? = null,
+    /** A fixed x range (e.g. a whole day), rather than the data's. */
+    xMin: Float? = null,
+    xMax: Float? = null,
     band: Pair<Float, Float>? = null,
     fill: Boolean = true,
     invert: Boolean = false,
@@ -161,7 +164,7 @@ fun LineChart(
             if (yMin == null) lo -= pad
             if (yMax == null) hi += pad
         }
-        val x0 = xs.first(); val x1 = max(xs.last(), x0 + 1e-3f)
+        val x0 = xMin ?: xs.first(); val x1 = max(xMax ?: xs.last(), x0 + 1e-3f)
         geometry[0] = leftPad; geometry[1] = w; geometry[2] = x0; geometry[3] = x1
         fun px(x: Float) = leftPad + (x - x0) / (x1 - x0) * w
         fun py(y: Float): Float { val f = (y - lo) / (hi - lo); return topPad + (if (invert) f else 1 - f) * h }
@@ -173,7 +176,7 @@ fun LineChart(
             val l = tm.measure(yFmt(v), axisText)
             drawText(l, topLeft = Offset(0f, y - l.size.height / 2))
         }
-        (xLabels ?: listOf(x0 to xFmt(x0), x1 to xFmt(x1))).forEach { (x, s) ->
+        (xLabels?.filter { it.first in x0..x1 } ?: listOf(x0 to xFmt(x0), x1 to xFmt(x1))).forEach { (x, s) ->
             val l = tm.measure(s, axisText)
             val cx = (px(x) - l.size.width / 2).coerceIn(leftPad, size.width - l.size.width)
             drawText(l, topLeft = Offset(cx, size.height - l.size.height))

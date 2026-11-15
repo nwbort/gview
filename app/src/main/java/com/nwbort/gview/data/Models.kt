@@ -98,6 +98,8 @@ data class DaySummary(
     val intensityGoal: Int? = null,
     val spo2: Double? = null,
     val respiration: Double? = null,
+    /** What charged and drained Body Battery that day, in order. */
+    val bbEvents: List<BbEvent> = emptyList(),
 ) {
     /** Garmin counts vigorous minutes double towards the weekly goal. */
     val intensityMin: Int? get() = if (moderateMin == null && vigorousMin == null) null else (moderateMin ?: 0) + 2 * (vigorousMin ?: 0)
@@ -140,6 +142,42 @@ data class Hrv(
 @Serializable
 data class BbCurve(val date: String, val minutes: List<Int>, val levels: List<Int>)
 
+/** One thing that moved Body Battery: a run, sleep, a stressful stretch, a rest. */
+@Serializable
+data class BbEvent(
+    /** ACTIVITY, SLEEP, STRESS, RECOVERY or NAP. */
+    val type: String,
+    /** The activity's name, for activities. */
+    val name: String? = null,
+    /** Local start, minutes after midnight (may be before midnight for sleep: negative). */
+    val startMin: Int? = null,
+    val minutes: Int? = null,
+    val impact: Int,
+)
+
+/** Heart rate through one day: minutes since midnight and bpm. */
+@Serializable
+data class HrCurve(val date: String, val minutes: List<Int>, val bpm: List<Int>)
+
+/** The user's heart-rate zones as set in Garmin Connect. */
+@Serializable
+data class HrZones(
+    /** Lower bound of zones 1-5, bpm. */
+    val floors: List<Int>,
+    val max: Int? = null,
+    val resting: Int? = null,
+    val threshold: Int? = null,
+    /** HR_MAX, LACTATE_THRESHOLD, HR_RESERVE or CUSTOM. */
+    val method: String? = null,
+) {
+    /** "128–145" for zone [i] (0-based); the top zone runs to max. */
+    fun range(i: Int): String? {
+        val lo = floors.getOrNull(i) ?: return null
+        val hi = floors.getOrNull(i + 1)?.minus(1) ?: max
+        return if (hi != null) "$lo–$hi" else "$lo+"
+    }
+}
+
 @Serializable
 data class Weight(val date: String, val kg: Double, val bodyFat: Double? = null)
 
@@ -151,6 +189,8 @@ data class Cache(
     val sleep: Map<String, Sleep> = emptyMap(),
     val hrv: Map<String, Hrv> = emptyMap(),
     val bodyBattery: Map<String, BbCurve> = emptyMap(),
+    val heartRate: Map<String, HrCurve> = emptyMap(),
+    val hrZones: HrZones? = null,
     val weight: Map<String, Weight> = emptyMap(),
     val fitnessAge: Double? = null,
     val lastSync: Long? = null,
@@ -182,6 +222,7 @@ data class Cache(
         sleep[date.toString()],
         hrv[date.toString()],
         bodyBattery[date.toString()],
+        heartRate[date.toString()],
         sortedActivities.filter { it.start.startsWith(date.toString()) }.reversed(),
     )
 
@@ -194,6 +235,7 @@ data class DayView(
     val sleep: Sleep?,
     val hrv: Hrv?,
     val bb: BbCurve?,
+    val hr: HrCurve?,
     val activities: List<Activity>,
 ) {
     val isEmpty: Boolean get() = summary == null && sleep == null && hrv == null && activities.isEmpty()
