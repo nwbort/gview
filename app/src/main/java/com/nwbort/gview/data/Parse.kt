@@ -68,6 +68,12 @@ object Parse {
             location = str("locationName"),
             hasRoute = bool("hasPolyline") ?: (num("startLatitude") != null),
             pr = bool("isPR") ?: false,
+            hrZones = (1..5).map { num("hrTimeInZone_$it") }.let { z -> if (z.all { it == null }) emptyList() else z.map { it ?: 0.0 } },
+            fastest = keys.filter { it.startsWith("fastestSplit_") }
+                .mapNotNull { k -> k.removePrefix("fastestSplit_").toIntOrNull()?.let { m -> num(k)?.takeIf { it > 0 }?.let { m to it } } }
+                .toMap(),
+            tempMin = num("minTemperature"),
+            tempMax = num("maxTemperature"),
         )
     }
 

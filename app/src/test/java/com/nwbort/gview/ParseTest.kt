@@ -17,9 +17,21 @@ class ParseTest {
                "averageSpeed":3.28,"averageHR":148,"maxHR":171,"calories":712,
                "averageRunningCadenceInStepsPerMinute":172.4,"aerobicTrainingEffect":3.4,
                "trainingEffectLabel":"TEMPO","vO2MaxValue":54,"hasPolyline":true,"locationName":"Manly"},
+              {"activityId":124,"activityName":"Sydney Running","startTimeLocal":"2026-11-12 05:54:55",
+               "activityType":{"typeId":1,"typeKey":"running","parentTypeId":17},"distance":15015.7,"duration":5571.0,
+               "minTemperature":26.0,"maxTemperature":30.0,"fastestSplit_1000":291.86,"fastestSplit_1609":469.85,
+               "fastestSplit_5000":1497.85,"fastestSplit_10000":3615.73,"hrTimeInZone_1":1253.0,"hrTimeInZone_2":2341.98,
+               "hrTimeInZone_3":1012.32,"hrTimeInZone_4":834.61,"hrTimeInZone_5":0.0,"avgGradeAdjustedSpeed":2.731},
               {"activityName":"no id"}]"""
         )
-        assertEquals(1, a.size)
+        assertEquals(2, a.size)
+        with(a[1]) {
+            assertEquals(listOf(1253.0, 2341.98, 1012.32, 834.61, 0.0), hrZones)
+            assertEquals(mapOf(1000 to 291.86, 1609 to 469.85, 5000 to 1497.85, 10000 to 3615.73), fastest)
+            assertEquals(26.0, tempMin!!, 0.0)
+            assertEquals(30.0, tempMax!!, 0.0)
+        }
+        assertTrue(a[0].hrZones.isEmpty())
         with(a[0]) {
             assertEquals(123L, id)
             assertEquals("trail_running", type)

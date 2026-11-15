@@ -134,7 +134,7 @@ fun GviewRoot(vm: AppViewModel) {
                     when (tab) {
                         Tab.TODAY -> TodayScreen(cache, syncing, vm::sync, settings, onActivity = { open(Screen.ActivityDetail(it)) }, onMetric = { open(Screen.MetricDetail(it)) })
                         Tab.ACTIVITIES -> ActivitiesScreen(cache, syncing, vm::sync, settings, onActivity = { open(Screen.ActivityDetail(it)) })
-                        Tab.TRENDS -> TrendsScreen(cache, settings, onMetric = { open(Screen.MetricDetail(it)) })
+                        Tab.TRENDS -> TrendsScreen(cache, settings, onMetric = { open(Screen.MetricDetail(it)) }, onActivity = { open(Screen.ActivityDetail(it)) })
                     }
                 }
             }

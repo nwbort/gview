@@ -131,6 +131,10 @@ class AppTest {
         shot("12d-efficiency")
         compose.onNodeWithText("From everything synced", substring = true).performScrollTo()
         shot("12e-recovery")
+        compose.onNodeWithText("Garmin's fastest stretch", substring = true).performScrollTo()
+        shot("12f-bests")
+        scrollTo("TIME IN HEART-RATE ZONES")
+        shot("12g-zones")
         scrollTo("RESTING HEART RATE")
         shot("13-trends-more")
 

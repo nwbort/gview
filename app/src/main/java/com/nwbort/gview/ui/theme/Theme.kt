@@ -38,6 +38,9 @@ object G {
     val rem = Color(0xFFE87BA4)
     val awake = Color(0xFFE4E1D9)
 
+    /** Heart-rate zones 1-5, in Garmin's familiar order: grey, blue, green, orange, red. */
+    val zones = listOf(Color(0xFFB4B1A8), Color(0xFF2A78D6), Color(0xFF1BAF7A), Color(0xFFEB6834), Color(0xFFE34948))
+
     fun sport(s: Sport): Color = when (s) {
         Sport.RUN -> Color(0xFFEB6834)
         Sport.RIDE -> Color(0xFF2A78D6)

@@ -38,7 +38,7 @@ import java.time.temporal.TemporalAdjusters
 import kotlin.math.roundToInt
 
 @Composable
-fun TrendsScreen(cache: Cache, onSettings: () -> Unit, onMetric: (Metric) -> Unit) {
+fun TrendsScreen(cache: Cache, onSettings: () -> Unit, onMetric: (Metric) -> Unit, onActivity: (Long) -> Unit) {
     var range by rememberSaveable { mutableStateOf(Range.QUARTER) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Header("Trends", null, onSettings)
@@ -46,8 +46,10 @@ fun TrendsScreen(cache: Cache, onSettings: () -> Unit, onMetric: (Metric) -> Uni
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             VolumeCard(cache, range)
             FitnessCard(cache, range)
+            ZonesCard(cache, range)
             EfficiencyCard(cache, range)
             RecoveryCard(cache)
+            BestsCard(cache, range, onActivity)
             Metric.entries.forEach { m ->
                 // Weight and VO₂ max only show up for people who have them.
                 if (m.sparse && m.series(cache, Range.YEAR).isEmpty()) return@forEach

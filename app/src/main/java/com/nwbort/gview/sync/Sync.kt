@@ -76,7 +76,10 @@ class Sync(private val context: Context, private val store: Store, private val a
         val want = today.minusYears(cache.historyYears.toLong()).plusDays(1)
         // Each kind of data keeps its own high-water mark, so one that failed
         // (or is new) catches up on everything next time.
-        fun since(section: String): LocalDate = cache.covered[section]?.let { minOf(LocalDate.parse(it).minusDays(3), today.minusDays(7)) }
+        fun since(section: String): LocalDate =
+            // Activities parsed before newer fields were read are fetched again, all of them, once.
+            if (section == ACTIVITIES && cache.activityFields < ACTIVITY_FIELDS) want
+            else cache.covered[section]?.let { minOf(LocalDate.parse(it).minusDays(3), today.minusDays(7)) }
             ?: want
         // And its low-water mark: when the history setting grows, fetch just the older stretch.
         fun earliest(section: String): LocalDate? = cache.earliest[section]?.let(LocalDate::parse)
@@ -141,6 +144,7 @@ class Sync(private val context: Context, private val store: Store, private val a
                 lastSync = System.currentTimeMillis(),
                 syncedTo = today.toString(),
                 covered = c.covered + done,
+                activityFields = if (ACTIVITIES in synced) ACTIVITY_FIELDS else c.activityFields,
                 earliest = (c.earliest + reached).mapValues { maxOf(it.value, keep) },
                 errors = errors,
             )
@@ -226,6 +230,8 @@ class Sync(private val context: Context, private val store: Store, private val a
     companion object {
         private const val HISTORY_DAYS = 365L
         private const val ACTIVITIES = "Activities"
+        /** Bump when [com.nwbort.gview.data.Parse] reads new activity fields. */
+        private const val ACTIVITY_FIELDS = 2
         private const val SUMMARY = "Daily summary"
         private const val SLEEP = "Sleep"
         private const val HRV = "HRV"

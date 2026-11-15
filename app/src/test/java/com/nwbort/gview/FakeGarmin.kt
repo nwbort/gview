@@ -30,7 +30,21 @@ class FakeGarmin(private val today: LocalDate = LocalDate.now()) : GarminApi("ht
 
     override fun activities(token: String, from: LocalDate, to: LocalDate): List<Activity> {
         calls++
-        return generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.mapNotNull { d -> activityOn(d) }.toList()
+        return generateSequence(from) { it.plusDays(1) }.takeWhile { !it.isAfter(to) }.mapNotNull { d -> activityOn(d)?.let { extras(d, it) } }.toList()
+    }
+
+    /** Zones, fastest stretches and temperature, as Garmin's activity list gives them. */
+    private fun extras(d: LocalDate, a: Activity): Activity {
+        val t = a.timeS ?: return a
+        val hard = a.name == "Tempo Run"
+        val zones = if (a.avgHr == null) emptyList() else if (hard) listOf(0.05, 0.25, 0.3, 0.35, 0.05).map { it * t } else listOf(0.15, 0.6, 0.2, 0.05, 0.0).map { it * t }
+        val km = a.km ?: 0.0
+        val pace = if (km > 0) t / km else 0.0 // s/km
+        val fastest = if (a.sport != com.nwbort.gview.data.Sport.RUN) emptyMap() else
+            listOf(1000, 1609, 5000, 10000, 21097).filter { it <= km * 1000 }
+                .associateWith { m -> m / 1000.0 * pace * (0.93 + 0.05 * (m / 21097.0) + 0.03 * noise(d, m)) }
+        val temp = 18 + 8 * sin((d.dayOfYear + 10) * 2 * PI / 365)
+        return a.copy(hrZones = zones, fastest = fastest, tempMin = temp - 2, tempMax = temp + 2)
     }
 
     private fun activityOn(d: LocalDate): Activity? {

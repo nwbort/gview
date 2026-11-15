@@ -100,6 +100,8 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
                 }
                 Hero(a)
                 Details(a)
+                ActivityZones(a)
+                ActivityBests(a, cache)
                 track?.stats?.let { Effort(a, it, cache.runStats.values) }
                 if (track != null) Charts(a, track)
                 if (track != null && track.splits.size > 1) Splits(a, track)
@@ -142,6 +144,7 @@ private fun Effort(a: Activity, st: RunStats, all: Collection<RunStats>) {
                 if (drift == null && !st.steady) append("HR drift isn't shown: pace changed too much (intervals, repeats or a tempo block) for it to mean anything.")
                 if (drift != null) append(
                     when {
+                        drift >= 5 && (a.tempMax ?: 0.0) >= 25 -> "HR rose ${Fmt.one(drift)}% for the same pace in the second half, but it was ${a.tempMax!!.roundToInt()} °C: heat alone pushes heart rate up, so this says little about endurance."
                         drift < 5 -> "HR held steady through the second half (under 5% drift): well within your aerobic range."
                         drift < 10 -> "Some drift in the second half (5–10%): a solid aerobic workout near the edge of your endurance."
                         else -> "HR rose a lot for the same pace in the second half (over 10%): fatigue, heat or under-fuelling, or a long run beyond current endurance."
@@ -201,6 +204,10 @@ private fun Details(a: Activity) {
         a.vo2Max?.let { Triple("VO₂ max", it.roundToInt().toString(), null) },
         a.maxSpeed?.takeIf { a.sport == Sport.RIDE }?.let { Triple("Max speed", Fmt.kmh(it), "km/h") },
         a.steps?.takeIf { it > 0 }?.let { Triple("Steps", Fmt.int(it), null) },
+        a.tempMax?.let { hi ->
+            val lo = a.tempMin
+            Triple("Temperature", if (lo != null && lo.roundToInt() != hi.roundToInt()) "${lo.roundToInt()}–${hi.roundToInt()}" else "${hi.roundToInt()}", "°C")
+        },
     )
     if (stats.isEmpty()) return
     Panel {

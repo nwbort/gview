@@ -29,6 +29,15 @@ activities and trends, synced from Garmin Connect and kept on the phone.
   better or worse sleep (evening workouts, stressful days, hard days). Only
   what the data clearly shows is listed.
 
+- **Heart-rate zones.** Each activity shows its time in zones 1–5, and
+  Trends adds up the range: how much was easy (zones 1–2) against the
+  usual ~80% easy for endurance training.
+- **Personal bests.** Garmin's fastest 1 km, mile, 5 km, 10 km (and longer)
+  within any run, all time and within the range shown; tap one to open the
+  run. Each run marks the ones that are your best.
+- **Temperature** for each activity, and the drift note says when heat, not
+  fitness, is the likelier reason heart rate climbed.
+
 Efficiency and drift need each run's file, so after each sync the app works
 through older runs, 40 at a time, in the background.
 

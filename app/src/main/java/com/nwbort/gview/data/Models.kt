@@ -35,6 +35,12 @@ data class Activity(
     val location: String? = null,
     val hasRoute: Boolean = false,
     val pr: Boolean = false,
+    /** Seconds in heart-rate zones 1-5. */
+    val hrZones: List<Double> = emptyList(),
+    /** Garmin's fastest stretch of each distance within the activity: metres to seconds. */
+    val fastest: Map<Int, Double> = emptyMap(),
+    val tempMin: Double? = null,
+    val tempMax: Double? = null,
 ) {
     val date: LocalDate get() = LocalDate.parse(start.take(10))
     val startTime: LocalDateTime get() = LocalDateTime.parse(start.replace(' ', 'T').take(19), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
@@ -160,6 +166,8 @@ data class Cache(
     val analysed: Set<Long> = emptySet(),
     /** The [Fit.VERSION] those runs were analysed with; a newer one analyses them again. */
     val analysedWith: Int = 0,
+    /** Which version of the activity fields the cached activities were parsed with. */
+    val activityFields: Int = 0,
     /** How many years back to sync, from Settings. */
     val historyYears: Int = 1,
     /** What failed on the last sync, by section ("Sleep", "HRV" ...). */
