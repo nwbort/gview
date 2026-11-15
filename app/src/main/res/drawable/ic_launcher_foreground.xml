@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 108dp adaptive canvas: three activity rings inside the 66dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M54,27 A27,27 0 1,1 53.99,27" android:strokeColor="#266250D6" android:strokeWidth="5.5" android:fillColor="#00000000" />
+    <path android:pathData="M54,27 A27,27 0 1,1 27.05,55.70" android:strokeColor="#6250D6" android:strokeWidth="5.5" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M54,35 A19,19 0 1,1 53.99,35" android:strokeColor="#261BAF7A" android:strokeWidth="5.5" android:fillColor="#00000000" />
+    <path android:pathData="M54,35 A19,19 0 1,1 42.83,69.37" android:strokeColor="#1BAF7A" android:strokeWidth="5.5" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M54,43 A11,11 0 1,1 53.99,43" android:strokeColor="#262A78D6" android:strokeWidth="5.5" android:fillColor="#00000000" />
+    <path android:pathData="M54,43 A11,11 0 1,1 45.52,46.99" android:strokeColor="#2A78D6" android:strokeWidth="5.5" android:strokeLineCap="round" android:fillColor="#00000000" />
+</vector>
