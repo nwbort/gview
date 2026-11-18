@@ -3,4 +3,6 @@
     <string name="app_name">gview</string>
     <string name="widget_name">Today\'s health</string>
     <string name="widget_description">Body Battery, sleep, HRV and steps from Garmin</string>
+    <string name="last_activity_widget_name">Last activity</string>
+    <string name="last_activity_widget_description">Your latest Garmin activity. Tap to open it.</string>
 </resources>

@@ -25,6 +25,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import com.nwbort.gview.ui.Fmt
 import java.io.File
 
 /** The real app wired to [FakeGarmin], with map tiles off so screenshots don't need the network. */
@@ -110,6 +111,14 @@ class AppTest {
         shot("10b-map-heart-rate")
         compose.onNodeWithContentDescription("Heart rate chart").performTouchInput { up() }
         back()
+        back()
+
+        // The last-activity widget's tap opens the newest activity's page, from anywhere.
+        compose.onNodeWithText("Today").performClick()
+        val latest = Graph.store.cache.value.sortedActivities.first()
+        compose.runOnUiThread { compose.activity.onNewIntent(MainActivity.openActivity(compose.activity, latest.id)) }
+        compose.waitUntil(15_000) { compose.onAllNodesWithText(Fmt.when_(latest), substring = true).fetchSemanticsNodes().isNotEmpty() }
+        shot("08b-from-widget")
         back()
 
         // Routes fetched for the detail page now show in the list.

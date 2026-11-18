@@ -16,7 +16,7 @@ import com.nwbort.gview.data.GarminAuthException
 import com.nwbort.gview.data.Parse
 import com.nwbort.gview.data.Store
 import com.nwbort.gview.data.Track
-import com.nwbort.gview.widget.HealthWidget
+import com.nwbort.gview.widget.Widgets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -158,7 +158,7 @@ class Sync(private val context: Context, private val store: Store, private val a
                 errors = errors,
             )
         }
-        HealthWidget.refresh(context)
+        Widgets.refresh(context)
         return Result.Done(activities.count { it.id !in known }, errors.keys.toList())
     }
 

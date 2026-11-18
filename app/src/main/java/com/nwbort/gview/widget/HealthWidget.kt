@@ -1,11 +1,11 @@
 package com.nwbort.gview.widget
 
 import android.content.Context
-import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -13,12 +13,10 @@ import androidx.glance.GlanceModifier
 import androidx.glance.LocalContext
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
-import androidx.glance.appwidget.updateAll
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -68,7 +66,7 @@ class HealthWidget : GlanceAppWidget() {
         val s = day.summary
         Column(
             GlanceModifier.fillMaxSize().background(ColorProvider(G.card)).cornerRadius(24.dp).padding(16.dp)
-                .clickable(actionStartActivity(Intent(LocalContext.current, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))),
+                .clickable(actionStartActivity(MainActivity.home(LocalContext.current))),
         ) {
             Text(
                 "gview · ${Fmt.weekday(today)} ${Fmt.shortDate(today)}",
@@ -77,46 +75,36 @@ class HealthWidget : GlanceAppWidget() {
             )
             Spacer(GlanceModifier.height(8.dp))
             Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                Cell("Body Battery", (s?.bbLatest ?: s?.bbMax)?.toString() ?: "–", "", G.battery, GlanceModifier.defaultWeight())
-                Cell("Sleep", sleep?.let { Fmt.hm(it.seconds.toDouble()) } ?: "–", sleep?.score?.let { "score $it" } ?: "", G.sleep, GlanceModifier.defaultWeight())
+                WidgetCell("Body Battery", (s?.bbLatest ?: s?.bbMax)?.toString() ?: "–", "", G.battery, GlanceModifier.defaultWeight())
+                WidgetCell("Sleep", sleep?.let { Fmt.hm(it.seconds.toDouble()) } ?: "–", sleep?.score?.let { "score $it" } ?: "", G.sleep, GlanceModifier.defaultWeight())
             }
             Row(GlanceModifier.fillMaxWidth().defaultWeight()) {
-                Cell("HRV", day.hrv?.lastNight?.toString() ?: "–", if (day.hrv?.lastNight != null) "ms" else "", G.hrv, GlanceModifier.defaultWeight())
-                Cell("Steps", Fmt.int(s?.steps), "", G.steps, GlanceModifier.defaultWeight())
+                WidgetCell("HRV", day.hrv?.lastNight?.toString() ?: "–", if (day.hrv?.lastNight != null) "ms" else "", G.hrv, GlanceModifier.defaultWeight())
+                WidgetCell("Steps", Fmt.int(s?.steps), "", G.steps, GlanceModifier.defaultWeight())
             }
-        }
-    }
-
-    @Composable
-    private fun Cell(label: String, value: String, unit: String, color: Color, modifier: GlanceModifier) {
-        Column(modifier.padding(vertical = 2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(GlanceModifier.size(7.dp).cornerRadius(4.dp).background(ColorProvider(color))) {}
-                Spacer(GlanceModifier.width(6.dp))
-                Text(label.uppercase(), style = TextStyle(color = ColorProvider(G.ink2), fontSize = 10.sp, fontWeight = FontWeight.Medium), maxLines = 1)
-            }
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text(value, style = TextStyle(color = ColorProvider(G.ink), fontSize = 24.sp), maxLines = 1)
-                if (unit.isNotEmpty()) {
-                    Spacer(GlanceModifier.width(4.dp))
-                    Text(unit, style = TextStyle(color = ColorProvider(G.ink3), fontSize = 11.sp), maxLines = 1)
-                }
-            }
-        }
-    }
-
-    companion object {
-        suspend fun refresh(context: Context) {
-            runCatching { HealthWidget().updateAll(context) }
-        }
-
-        /** Re-render the picker preview. The platform rate-limits this, so failures are fine. */
-        suspend fun publishPreview(context: Context) {
-            runCatching { GlanceAppWidgetManager(context).setWidgetPreviews(HealthWidgetReceiver::class) }
         }
     }
 }
 
 class HealthWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = HealthWidget()
+}
+
+/** A coloured dot and label over a big value: one number on a widget. */
+@Composable
+internal fun WidgetCell(label: String, value: String, unit: String, color: Color, modifier: GlanceModifier, valueSize: TextUnit = 24.sp) {
+    Column(modifier.padding(vertical = 2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(GlanceModifier.size(7.dp).cornerRadius(4.dp).background(ColorProvider(color))) {}
+            Spacer(GlanceModifier.width(6.dp))
+            Text(label.uppercase(), style = TextStyle(color = ColorProvider(G.ink2), fontSize = 10.sp, fontWeight = FontWeight.Medium), maxLines = 1)
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(value, style = TextStyle(color = ColorProvider(G.ink), fontSize = valueSize), maxLines = 1)
+            if (unit.isNotEmpty()) {
+                Spacer(GlanceModifier.width(4.dp))
+                Text(unit, style = TextStyle(color = ColorProvider(G.ink3), fontSize = 11.sp), maxLines = 1)
+            }
+        }
+    }
 }

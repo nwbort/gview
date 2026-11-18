@@ -6,7 +6,7 @@ import com.nwbort.gview.data.GarminApi
 import com.nwbort.gview.data.Store
 import com.nwbort.gview.sync.Sync
 import com.nwbort.gview.ui.TileCache
-import com.nwbort.gview.widget.HealthWidget
+import com.nwbort.gview.widget.Widgets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,7 +26,7 @@ class GviewApp : Application() {
         try {
             Graph.init(this)
             Graph.scope.launch {
-                HealthWidget.publishPreview(this@GviewApp)
+                Widgets.publishPreviews(this@GviewApp)
                 if (Graph.store.account.value.connected) Sync.schedule(this@GviewApp, connected = true)
             }
         } catch (e: Throwable) {

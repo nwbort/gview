@@ -53,7 +53,7 @@ sealed interface Screen {
 }
 
 @Composable
-fun GviewRoot(vm: AppViewModel) {
+fun GviewRoot(vm: AppViewModel, openActivity: Long? = null, onOpened: () -> Unit = {}) {
     val account by vm.account.collectAsStateWithLifecycle()
     val cache by vm.cache.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
@@ -76,6 +76,15 @@ fun GviewRoot(vm: AppViewModel) {
     BackHandler(enabled = stack.isEmpty() && tab != Tab.TODAY) { tab = Tab.TODAY }
     val open: (Screen) -> Unit = { stack.add(it) }
     val back: () -> Unit = { if (stack.isNotEmpty()) stack.removeAt(stack.lastIndex) }
+    // From the last-activity widget: its page, over the Activities tab.
+    LaunchedEffect(openActivity) {
+        if (openActivity != null) {
+            tab = Tab.ACTIVITIES
+            stack.clear()
+            stack.add(Screen.ActivityDetail(openActivity))
+            onOpened()
+        }
+    }
 
     AnimatedContent(
         targetState = stack.lastOrNull(),
