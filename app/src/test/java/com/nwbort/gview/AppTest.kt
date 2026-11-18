@@ -116,7 +116,7 @@ class AppTest {
         // The last-activity widget's tap opens the newest activity's page, from anywhere.
         compose.onNodeWithText("Today").performClick()
         val latest = Graph.store.cache.value.sortedActivities.first()
-        compose.runOnUiThread { compose.activity.onNewIntent(MainActivity.openActivity(compose.activity, latest.id)) }
+        compose.activityRule.scenario.onActivity { it.onNewIntent(MainActivity.openActivity(it, latest.id)) }
         compose.waitUntil(15_000) { compose.onAllNodesWithText(Fmt.when_(latest), substring = true).fetchSemanticsNodes().isNotEmpty() }
         shot("08b-from-widget")
         back()
