@@ -47,7 +47,6 @@ class MainActivity : ComponentActivity() {
 
     public override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
         activityId(intent)?.let { pending = it }
     }
 
