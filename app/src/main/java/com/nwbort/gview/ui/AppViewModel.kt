@@ -8,7 +8,7 @@ import com.nwbort.gview.data.Account
 import com.nwbort.gview.data.Activity
 import com.nwbort.gview.data.Track
 import com.nwbort.gview.sync.Sync
-import com.nwbort.gview.widget.HealthWidget
+import com.nwbort.gview.widget.Widgets
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -64,7 +64,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             Graph.store.clear()
             Sync.schedule(getApplication(), connected = false)
-            HealthWidget.refresh(getApplication())
+            Widgets.refresh(getApplication())
         }
     }
 
