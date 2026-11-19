@@ -63,7 +63,11 @@ class Sync(private val context: Context, private val store: Store, private val a
             }
         }
         // Routes come after the spinner has gone: they're a nicety, not the sync.
-        if (r is Result.Done) runCatching { prefetchRoutes() }
+        if (r is Result.Done) {
+            runCatching { prefetchRoutes() }
+            // The last-activity widget draws the newest route, which may only just have arrived.
+            Widgets.refresh(context)
+        }
         return r
     }
 

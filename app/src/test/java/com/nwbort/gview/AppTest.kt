@@ -27,6 +27,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import com.nwbort.gview.ui.Fmt
 import java.io.File
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
+import com.nwbort.gview.ui.theme.G
 
 /** The real app wired to [FakeGarmin], with map tiles off so screenshots don't need the network. */
 class TestApp : Application() {
@@ -124,6 +128,7 @@ class AppTest {
         // Routes fetched for the detail page now show in the list.
         compose.waitForIdle()
         shot("11-activities-with-routes")
+        widgetRoute(latest)
 
         // Runs' files are analysed in the background after a sync.
         val analysedBy = System.currentTimeMillis() + 60_000
@@ -188,6 +193,17 @@ class AppTest {
     private fun back() {
         compose.activity.onBackPressedDispatcher.onBackPressed()
         compose.waitForIdle()
+    }
+
+    /** The route outline the last-activity widget draws behind its figures, at a 3x2 widget's size. */
+    private fun widgetRoute(a: com.nwbort.gview.data.Activity) {
+        val track = kotlinx.coroutines.runBlocking { Graph.store.track(a.id) } ?: return
+        val bmp = com.nwbort.gview.widget.routeBitmap(
+            track, DpSize(250.dp, 160.dp), G.sport(a.sport).toArgb(), 2f,
+        ) ?: return
+        val out = Bitmap.createBitmap(bmp.width, bmp.height, Bitmap.Config.ARGB_8888)
+        android.graphics.Canvas(out).apply { drawColor(android.graphics.Color.WHITE); drawBitmap(bmp, 0f, 0f, null) }
+        File(File("build/screenshots").apply { mkdirs() }, "12-widget-route.png").outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     private fun shot(name: String) {
