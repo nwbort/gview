@@ -9,6 +9,21 @@ import org.junit.Test
 /** Responses shaped like Garmin's Personal API OpenAPI spec. */
 class ParseTest {
     @Test
+    fun trimmed_activity_keeps_its_window_and_drops_stale_fastest_splits() {
+        // Garmin's numbers for a trail run trimmed after the watch was left on for the drive home:
+        // the summary is the run, but the fastest splits still include the car.
+        val a = Parse.activities(
+            """[{"activityId":23553907364,"startTimeLocal":"2026-07-11 08:07:17","activityType":{"typeKey":"trail_running"},
+               "distance":16246.74,"duration":9456.0,"elapsedDuration":9456.0,"maxSpeed":3.919,"beginTimestamp":1783721237000,
+               "fastestSplit_1000":37.178,"fastestSplit_1609":75.581,"fastestSplit_5000":359.129,
+               "fastestSplit_10000":1725.993,"fastestSplit_21098":8231.97}]"""
+        ).single()
+        assertEquals(1_783_721_237_000L, a.startMs)
+        assertEquals(9456.0, a.elapsedS!!, 0.0)
+        assertTrue(a.fastest.isEmpty())
+    }
+
+    @Test
     fun activities() {
         val a = Parse.activities(
             """[{"activityId":123,"activityName":"Morning Run","startTimeLocal":"2026-11-14 06:42:10",
@@ -32,6 +47,7 @@ class ParseTest {
             assertEquals(30.0, tempMax!!, 0.0)
         }
         assertTrue(a[0].hrZones.isEmpty())
+        assertNull(a[0].startMs)
         with(a[0]) {
             assertEquals(123L, id)
             assertEquals("trail_running", type)

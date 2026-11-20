@@ -199,8 +199,10 @@ class Sync(private val context: Context, private val store: Store, private val a
         withContext(Dispatchers.IO) {
             val bytes = withToken(key) { api.activityFile(it, activity.id) }
             val fit = Fit.unzip(bytes) ?: return@withContext Track(v = Fit.VERSION)
-            Fit.track(Fit.records(fit), activity.sport, activity.date.toString())
+            Fit.track(Fit.trim(Fit.records(fit), activity.startMs, activity.elapsedS), activity.sport, activity.date.toString())
         }.also { t ->
+            // Activities parsed before the trim window was read: show it, but decode it again after the next sync.
+            if (store.cache.value.activityFields < ACTIVITY_FIELDS) return@also
             store.saveTrack(activity.id, t)
             store.updateCache { c ->
                 c.copy(
@@ -244,7 +246,7 @@ class Sync(private val context: Context, private val store: Store, private val a
         private const val HISTORY_DAYS = 365L
         private const val ACTIVITIES = "Activities"
         /** Bump when [com.nwbort.gview.data.Parse] reads new activity fields. */
-        private const val ACTIVITY_FIELDS = 2
+        private const val ACTIVITY_FIELDS = 3
         private const val SUMMARY = "Daily summary"
         private const val SLEEP = "Sleep"
         private const val HRV = "HRV"

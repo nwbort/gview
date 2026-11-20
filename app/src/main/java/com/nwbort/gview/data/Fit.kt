@@ -151,7 +151,26 @@ object Fit {
     }
 
     /** Bump when [track] changes, so routes decoded before are decoded again. */
-    const val VERSION = 5
+    const val VERSION = 6
+
+    /** Seconds from the Unix epoch to FIT's (1989-12-31 UTC). */
+    private const val FIT_EPOCH = 631_065_600L
+
+    /**
+     * Just the records within the activity as Garmin has it now. Trimming an activity in
+     * Garmin Connect (say, a watch left running on the drive home) keeps the original file,
+     * so the cut is only in the summary: its start and elapsed time. Distance restarts at
+     * the new start. Everything is kept if the window misses the file altogether.
+     */
+    fun trim(records: List<Record>, startMs: Long?, elapsedS: Double?): List<Record> {
+        if (startMs == null || elapsedS == null || elapsedS <= 0 || records.isEmpty()) return records
+        val start = startMs / 1000 - FIT_EPOCH
+        val end = start + kotlin.math.ceil(elapsedS).toLong()
+        val kept = records.filter { it.time in start..end }
+        if (kept.isEmpty() || kept.size == records.size) return records
+        val d0 = kept.firstNotNullOfOrNull { it.dist } ?: 0.0
+        return if (d0 == 0.0) kept else kept.map { Record(it.time, it.lat, it.lon, it.dist?.minus(d0), it.speed, it.hr, it.alt) }
+    }
 
     private const val SEMI = 180.0 / 2147483648.0
 

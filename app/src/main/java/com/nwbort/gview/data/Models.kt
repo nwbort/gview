@@ -14,6 +14,10 @@ data class Activity(
     val type: String = "other",
     /** Local start, "yyyy-MM-dd HH:mm:ss". */
     val start: String,
+    /** Start as epoch ms (Garmin's beginTimestamp). */
+    val startMs: Long? = null,
+    /** Start to finish including pauses: what's left after a trim in Garmin Connect. */
+    val elapsedS: Double? = null,
     val distanceM: Double? = null,
     val durationS: Double? = null,
     val movingS: Double? = null,
