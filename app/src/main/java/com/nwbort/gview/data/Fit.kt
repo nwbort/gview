@@ -165,7 +165,8 @@ object Fit {
     fun trim(records: List<Record>, startMs: Long?, elapsedS: Double?): List<Record> {
         if (startMs == null || elapsedS == null || elapsedS <= 0 || records.isEmpty()) return records
         val start = startMs / 1000 - FIT_EPOCH
-        val kept = records.filter { it.time in start - 1..start + elapsedS.toLong() + 1 }
+        val end = start + kotlin.math.ceil(elapsedS).toLong()
+        val kept = records.filter { it.time in start..end }
         if (kept.isEmpty() || kept.size == records.size) return records
         val d0 = kept.firstNotNullOfOrNull { it.dist } ?: 0.0
         return if (d0 == 0.0) kept else kept.map { Record(it.time, it.lat, it.lon, it.dist?.minus(d0), it.speed, it.hr, it.alt) }
