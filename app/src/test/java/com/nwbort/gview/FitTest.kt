@@ -74,6 +74,27 @@ class FitTest {
     }
 
     @Test
+    fun trimmed_activities_leave_out_what_was_cut() {
+        // A run of 9456 s from 22:07:17 UTC, then the watch left going for a drive at 25 m/s.
+        val startMs = 1_783_721_237_000L
+        val t0 = startMs / 1000 - 631_065_600L
+        val recs = (0..12_000L).map { s ->
+            val d = if (s <= 9456) s * 1.7 else 9456 * 1.7 + (s - 9456) * 25.0
+            Fit.Record(t0 + s, null, null, d, if (s <= 9456) 1.7 else 25.0, null, null)
+        }
+        val kept = Fit.trim(recs, startMs, 9456.0)
+        assertEquals(9457, kept.size)
+        assertTrue(kept.all { it.speed == 1.7 })
+        // A trimmed start restarts distance from zero.
+        val late = Fit.trim(recs, startMs + 1_000_000, 1000.0)
+        assertEquals(0.0, late.first().dist!!, 1e-9)
+        assertEquals(1000 * 1.7, late.last().dist!!, 1e-6)
+        // A window that misses the file, or no window at all, keeps everything.
+        assertEquals(recs.size, Fit.trim(recs, 0L, 9456.0).size)
+        assertEquals(recs.size, Fit.trim(recs, null, null).size)
+    }
+
+    @Test
     fun garbage_is_not_a_fit_file() {
         assertTrue(Fit.records(ByteArray(40) { 7 }).isEmpty())
         assertNull(Fit.unzip(FitWriter.zip("hello".toByteArray(), "readme.txt")))

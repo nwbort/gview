@@ -47,6 +47,8 @@ object Parse {
             name = str("activityName").orEmpty(),
             type = type,
             start = start,
+            startMs = num("beginTimestamp")?.toLong(),
+            elapsedS = num("elapsedDuration"),
             distanceM = num("distance"),
             durationS = num("duration"),
             movingS = num("movingDuration"),
@@ -71,11 +73,17 @@ object Parse {
             hrZones = (1..5).map { num("hrTimeInZone_$it") }.let { z -> if (z.all { it == null }) emptyList() else z.map { it ?: 0.0 } },
             fastest = keys.filter { it.startsWith("fastestSplit_") }
                 .mapNotNull { k -> k.removePrefix("fastestSplit_").toIntOrNull()?.let { m -> num(k)?.takeIf { it > 0 }?.let { m to it } } }
+                // Garmin doesn't redo these when an activity is trimmed, so a forgotten stop
+                // and a drive home leaves "1 km in 37 s". Keep only what the trimmed run allows.
+                .filter { (m, s) -> possible(m, s, num("distance"), num("maxSpeed")) }
                 .toMap(),
             tempMin = num("minTemperature"),
             tempMax = num("maxTemperature"),
         )
     }
+
+    private fun possible(m: Int, s: Double, distance: Double?, maxSpeed: Double?): Boolean =
+        (distance == null || m <= distance * 1.01) && (maxSpeed == null || maxSpeed <= 0 || m / s <= maxSpeed * 1.05)
 
     // --- Daily summaries (v2) ---
 
