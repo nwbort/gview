@@ -9,6 +9,7 @@ serialization = "1.12.0"
 glance = "1.2.0"
 work = "2.12.0"
 genaiPrompt = "1.0.0-beta5"
+genaiTasks = "1.0.0-beta1"
 junit = "4.13.2"
 robolectric = "4.17"
 espresso = "3.7.0"
@@ -16,6 +17,9 @@ androidxTest = "1.7.0"
 
 [libraries]
 mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version.ref = "genaiPrompt" }
+mlkit-genai-summarization = { group = "com.google.mlkit", name = "genai-summarization", version.ref = "genaiTasks" }
+mlkit-genai-rewriting = { group = "com.google.mlkit", name = "genai-rewriting", version.ref = "genaiTasks" }
+mlkit-genai-proofreading = { group = "com.google.mlkit", name = "genai-proofreading", version.ref = "genaiTasks" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle" }

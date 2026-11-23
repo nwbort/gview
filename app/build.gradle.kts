@@ -88,6 +88,10 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     // Gemini Nano on phones that have it (AICore), for activity summaries.
     implementation(libs.mlkit.genai.prompt)
+    // TEMPORARY: only to check which Gemini Nano features this phone offers (AI debug panel).
+    implementation(libs.mlkit.genai.summarization)
+    implementation(libs.mlkit.genai.rewriting)
+    implementation(libs.mlkit.genai.proofreading)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

@@ -9,7 +9,14 @@ import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
+import com.google.mlkit.genai.proofreading.Proofreading
+import com.google.mlkit.genai.proofreading.ProofreaderOptions
+import com.google.mlkit.genai.rewriting.Rewriting
+import com.google.mlkit.genai.rewriting.RewriterOptions
+import com.google.mlkit.genai.summarization.Summarization
+import com.google.mlkit.genai.summarization.SummarizerOptions
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 
@@ -77,18 +84,30 @@ class GeminiNano : LocalAi {
             appendLine("$pkg: $info")
         }
         appendLine("Mapped status: ${status()}")
-        step("checkStatus") {
-            when (val raw = model.checkStatus()) {
-                FeatureStatus.UNAVAILABLE -> "UNAVAILABLE ($raw)"
-                FeatureStatus.DOWNLOADABLE -> "DOWNLOADABLE ($raw)"
-                FeatureStatus.DOWNLOADING -> "DOWNLOADING ($raw)"
-                FeatureStatus.AVAILABLE -> "AVAILABLE ($raw)"
-                else -> "unknown ($raw)"
-            }
-        }
+        step("prompt checkStatus") { statusName(model.checkStatus()) }
         step("baseModelName") { model.getBaseModelName() }
         step("availableFeatures") { model.getAvailableFeatures().toString() }
         step("tokenLimit") { model.getTokenLimit().toString() }
+        // The narrower task APIs: older Nano models (Pixel 8) may offer these even without the Prompt API.
+        step("summarization") {
+            val c = Summarization.getClient(
+                SummarizerOptions.builder(context).setInputType(SummarizerOptions.InputType.ARTICLE)
+                    .setOutputType(SummarizerOptions.OutputType.THREE_BULLETS).setLanguage(SummarizerOptions.Language.ENGLISH).build()
+            )
+            try { "${statusName(c.checkFeatureStatus().await())}, model ${runCatching { c.baseModelName.await() }.getOrElse { describe(it) }}" } finally { c.close() }
+        }
+        step("rewriting") {
+            val c = Rewriting.getClient(
+                RewriterOptions.builder(context).setOutputType(RewriterOptions.OutputType.SHORTEN).setLanguage(RewriterOptions.Language.ENGLISH).build()
+            )
+            try { "${statusName(c.checkFeatureStatus().await())}, model ${runCatching { c.baseModelName.await() }.getOrElse { describe(it) }}" } finally { c.close() }
+        }
+        step("proofreading") {
+            val c = Proofreading.getClient(
+                ProofreaderOptions.builder(context).setInputType(ProofreaderOptions.InputType.KEYBOARD).setLanguage(ProofreaderOptions.Language.ENGLISH).build()
+            )
+            try { "${statusName(c.checkFeatureStatus().await())}, model ${runCatching { c.baseModelName.await() }.getOrElse { describe(it) }}" } finally { c.close() }
+        }
     }.trimEnd()
 
     private suspend fun StringBuilder.step(name: String, block: suspend () -> String) {
@@ -111,6 +130,14 @@ class GeminiNano : LocalAi {
     private fun StringBuilder.frames(t: Throwable) {
         t.stackTrace.take(12).forEach { append("\n    at $it") }
     }
+
+    private fun statusName(raw: Int) = when (raw) {
+        FeatureStatus.UNAVAILABLE -> "UNAVAILABLE"
+        FeatureStatus.DOWNLOADABLE -> "DOWNLOADABLE"
+        FeatureStatus.DOWNLOADING -> "DOWNLOADING"
+        FeatureStatus.AVAILABLE -> "AVAILABLE"
+        else -> "unknown"
+    } + " ($raw)"
 
     private fun errorName(code: Int) = when (code) {
         GenAiException.ErrorCode.UNKNOWN -> "UNKNOWN"
