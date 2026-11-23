@@ -7,6 +7,11 @@ import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.GenerativeModel
+import com.google.mlkit.genai.prompt.ModelConfig
+import com.google.mlkit.genai.prompt.ModelPreference
+import com.google.mlkit.genai.prompt.ModelReleaseStage
+import com.google.mlkit.genai.prompt.generationConfig
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
 import com.google.mlkit.genai.proofreading.Proofreading
@@ -50,20 +55,48 @@ interface LocalAi {
 
 /**
  * Gemini Nano through ML Kit's Prompt API, which talks to Android's AICore.
- * Pixel 8 and later, Galaxy S24 and later and a few others have it.
+ * Google lists Pixel 9 and later and some recent Galaxy and other phones; others can get a
+ * preview model through AICore's Developer Preview.
  */
 class GeminiNano : LocalAi {
-    // Made on first use, so a phone without AICore never touches it beyond the status check.
-    private val model by lazy { Generation.getClient() }
+    // Made on first use, so a phone without AICore never touches them beyond the status check.
+    // The stable model first; phones off Google's list (a Pixel 8 Pro) can still run a preview
+    // model once AICore's Developer Preview is turned on, so fall back to those.
+    private val candidates by lazy {
+        listOf(
+            "stable" to Generation.getClient(),
+            "preview fast" to client(ModelReleaseStage.PREVIEW, ModelPreference.FAST),
+            "preview full" to client(ModelReleaseStage.PREVIEW, ModelPreference.FULL),
+        )
+    }
+    private var chosen: GenerativeModel? = null
+    private val model: GenerativeModel get() = chosen ?: candidates.first().second
 
-    override suspend fun status(): LocalAi.Status = try {
-        when (model.checkStatus()) {
+    private fun client(stage: Int, pref: Int) = Generation.getClient(generationConfig {
+        modelConfig = ModelConfig.builder().apply {
+            releaseStage = stage
+            preference = pref
+        }.build()
+    })
+
+    private suspend fun statusOf(m: GenerativeModel) = try {
+        when (m.checkStatus()) {
             FeatureStatus.AVAILABLE -> LocalAi.Status.AVAILABLE
             FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING -> LocalAi.Status.DOWNLOADABLE
             else -> LocalAi.Status.UNAVAILABLE
         }
     } catch (e: Throwable) {
         LocalAi.Status.UNAVAILABLE
+    }
+
+    /** The first model this phone offers, preferring one that's already downloaded. */
+    override suspend fun status(): LocalAi.Status {
+        val found = try { candidates.map { (_, m) -> m to statusOf(m) } } catch (e: Throwable) { return LocalAi.Status.UNAVAILABLE }
+        val best = found.firstOrNull { it.second == LocalAi.Status.AVAILABLE }
+            ?: found.firstOrNull { it.second == LocalAi.Status.DOWNLOADABLE }
+            ?: return LocalAi.Status.UNAVAILABLE
+        chosen = best.first
+        return best.second
     }
 
     // TEMPORARY debugging for phones that should have Gemini Nano but show no summary card.
@@ -84,10 +117,12 @@ class GeminiNano : LocalAi {
             appendLine("$pkg: $info")
         }
         appendLine("Mapped status: ${status()}")
-        step("prompt checkStatus") { statusName(model.checkStatus()) }
-        step("baseModelName") { model.getBaseModelName() }
-        step("availableFeatures") { model.getAvailableFeatures().toString() }
-        step("tokenLimit") { model.getTokenLimit().toString() }
+        appendLine("Chosen: ${candidates.firstOrNull { it.second === chosen }?.first ?: "none"}")
+        for ((name, m) in candidates) {
+            step("[$name] checkStatus") { statusName(m.checkStatus()) }
+            step("[$name] baseModelName") { m.getBaseModelName() }
+            step("[$name] availableFeatures") { m.getAvailableFeatures().toString() }
+        }
         // The narrower task APIs: older Nano models (Pixel 8) may offer these even without the Prompt API.
         step("summarization") {
             val c = Summarization.getClient(
