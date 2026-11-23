@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.DataObject
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nwbort.gview.ai.LocalAi
 import com.nwbort.gview.data.Activity
 import com.nwbort.gview.data.Analysis
 import com.nwbort.gview.data.RunStats
@@ -100,6 +102,7 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
                 }
                 Hero(a)
                 Details(a)
+                AiSummary(a, track, state is TrackState.Ready, vm)
                 ActivityZones(a, cache.hrZones)
                 ActivityBests(a, cache)
                 track?.stats?.let { Effort(a, it, cache.runStats.values) }
@@ -154,6 +157,65 @@ private fun Effort(a: Activity, st: RunStats, all: Collection<RunStats>) {
             style = MaterialTheme.typography.bodySmall,
             color = G.ink2,
         )
+    }
+}
+
+/**
+ * A few sentences about the workout, written on the phone by Gemini Nano.
+ * Only shown on phones that have it; on others there's nothing to see.
+ */
+@Composable
+private fun AiSummary(a: Activity, track: Track?, trackReady: Boolean, vm: AppViewModel) {
+    val status by vm.aiStatus.collectAsStateWithLifecycle()
+    val summaries by vm.summaries.collectAsStateWithLifecycle()
+    if (status == null || status == LocalAi.Status.UNAVAILABLE) return
+    val color = G.sport(a.sport)
+    val summary = summaries[a.id]
+    // Wait for the file so the splits and drift make it into the prompt.
+    val write = { if (trackReady) vm.summarise(a, track) }
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Label("Summary", color, Modifier.weight(1f))
+            if (summary is Summary.Downloading || summary is Summary.Writing) {
+                CircularProgressIndicator(color = color, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        when (summary) {
+            null -> {
+                Text(
+                    if (status == LocalAi.Status.DOWNLOADABLE) "Written on this phone by Gemini Nano: nothing leaves the device. The first time downloads Google's on-device model."
+                    else "Written on this phone by Gemini Nano: nothing leaves the device.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = G.ink2,
+                )
+                Spacer(Modifier.height(4.dp))
+                AiButton("Summarise this workout", trackReady, write)
+            }
+            Summary.Downloading -> Text("Downloading the on-device model. This only happens once and can take a few minutes on Wi-Fi.", style = MaterialTheme.typography.bodyMedium, color = G.ink2)
+            is Summary.Writing -> Text(summary.text.ifEmpty { "Thinking…" }, style = MaterialTheme.typography.bodyMedium, color = if (summary.text.isEmpty()) G.ink3 else G.ink)
+            is Summary.Done -> {
+                Text(summary.text, style = MaterialTheme.typography.bodyMedium, color = G.ink)
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Gemini Nano, on device. It can get things wrong.", style = MaterialTheme.typography.bodySmall, color = G.ink3, modifier = Modifier.weight(1f))
+                    TextButton(onClick = write) { Text("Rewrite", color = G.ink2) }
+                }
+            }
+            is Summary.Failed -> {
+                Text(summary.message, style = MaterialTheme.typography.bodySmall, color = G.ink2)
+                AiButton("Try again", trackReady, write)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    TextButton(onClick = onClick, enabled = enabled, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 8.dp)) {
+        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = if (enabled) G.ink else G.ink3, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, color = if (enabled) G.ink else G.ink3)
     }
 }
 

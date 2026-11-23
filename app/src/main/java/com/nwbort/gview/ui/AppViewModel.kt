@@ -4,12 +4,16 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nwbort.gview.Graph
+import com.nwbort.gview.ai.Brief
+import com.nwbort.gview.ai.LocalAi
 import com.nwbort.gview.data.Account
 import com.nwbort.gview.data.Activity
 import com.nwbort.gview.data.Track
 import com.nwbort.gview.sync.Sync
 import com.nwbort.gview.widget.Widgets
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -76,4 +80,47 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** An activity's route and streams, fetched from Garmin the first time. */
     suspend fun track(a: Activity): Track? = runCatching { Graph.sync.track(a) }.getOrNull()
+
+    private val _aiStatus = MutableStateFlow<LocalAi.Status?>(null)
+    /** Whether this phone can write summaries on device; null until checked. */
+    val aiStatus: StateFlow<LocalAi.Status?> = _aiStatus.asStateFlow()
+
+    init {
+        viewModelScope.launch { _aiStatus.value = Graph.ai.status() }
+    }
+
+    private val _summaries = MutableStateFlow<Map<Long, Summary>>(emptyMap())
+    /** Summaries written this session, by activity id: they're kept while the app is open. */
+    val summaries = _summaries.asStateFlow()
+
+    /** Writes an on-device summary of [a]. It carries on if the page is left. */
+    fun summarise(a: Activity, track: Track?) {
+        if (_summaries.value[a.id].let { it is Summary.Downloading || it is Summary.Writing }) return
+        val set = { s: Summary -> _summaries.update { it + (a.id to s) } }
+        set(Summary.Writing(""))
+        viewModelScope.launch {
+            var text = ""
+            try {
+                Graph.ai.write(Brief.prompt(a, track, cache.value)).collect { step ->
+                    when (step) {
+                        LocalAi.Step.Downloading -> set(Summary.Downloading)
+                        is LocalAi.Step.Text -> { text = step.text; set(Summary.Writing(text.trim())) }
+                    }
+                }
+                set(if (text.isBlank()) Summary.Failed("The model didn't write anything. Try again.") else Summary.Done(text.trim()))
+                _aiStatus.value = LocalAi.Status.AVAILABLE
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                set(Summary.Failed("Couldn't write a summary: ${e.message ?: e.javaClass.simpleName}"))
+            }
+        }
+    }
+}
+
+sealed interface Summary {
+    data object Downloading : Summary
+    data class Writing(val text: String) : Summary
+    data class Done(val text: String) : Summary
+    data class Failed(val message: String) : Summary
 }

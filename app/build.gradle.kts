@@ -86,6 +86,8 @@ dependencies {
     // Glance pulls in WorkManager 2.7 and Room 2.2, whose keep rules predate R8
     // full mode; current versions ship rules that work.
     implementation(libs.androidx.work.runtime)
+    // Gemini Nano on phones that have it (AICore), for activity summaries.
+    implementation(libs.mlkit.genai.prompt)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
