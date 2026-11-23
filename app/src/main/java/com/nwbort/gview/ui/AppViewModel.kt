@@ -85,8 +85,20 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether this phone can write summaries on device; null until checked. */
     val aiStatus: StateFlow<LocalAi.Status?> = _aiStatus.asStateFlow()
 
+    private val _aiDebug = MutableStateFlow<String?>(null)
+    /** TEMPORARY: why the on-device model is or isn't there, shown on the activity page. */
+    val aiDebug: StateFlow<String?> = _aiDebug.asStateFlow()
+
     init {
-        viewModelScope.launch { _aiStatus.value = Graph.ai.status() }
+        checkAi()
+    }
+
+    fun checkAi() {
+        viewModelScope.launch {
+            _aiDebug.value = "Checking…"
+            _aiStatus.value = Graph.ai.status()
+            _aiDebug.value = try { Graph.ai.diagnose(getApplication()) } catch (e: Throwable) { "diagnose threw ${e.javaClass.name}: ${e.message}" }
+        }
     }
 
     private val _summaries = MutableStateFlow<Map<Long, Summary>>(emptyMap())

@@ -1,7 +1,11 @@
 package com.nwbort.gview.ai
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.common.GenAiException
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
@@ -32,6 +36,9 @@ interface LocalAi {
 
     /** Downloads the model first if it needs to, then writes a reply to [prompt]. */
     fun write(prompt: String): Flow<Step>
+
+    /** TEMPORARY: a plain-text report of why [status] came out the way it did. Blank if there's nothing to say. */
+    suspend fun diagnose(context: Context): String = ""
 }
 
 /**
@@ -51,6 +58,65 @@ class GeminiNano : LocalAi {
     } catch (e: Throwable) {
         LocalAi.Status.UNAVAILABLE
     }
+
+    // TEMPORARY debugging for phones that should have Gemini Nano but show no summary card.
+    override suspend fun diagnose(context: Context): String = buildString {
+        appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
+        appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), patch ${Build.VERSION.SECURITY_PATCH}")
+        appendLine("Build: ${Build.DISPLAY}")
+        for (pkg in listOf("com.google.android.aicore", "com.google.android.as", "com.google.android.as.oss", "com.google.android.gms")) {
+            val info = try {
+                val p = context.packageManager.getPackageInfo(pkg, 0)
+                val enabled = p.applicationInfo?.enabled ?: "?"
+                "${p.versionName} (${p.longVersionCode}), enabled=$enabled"
+            } catch (e: PackageManager.NameNotFoundException) {
+                "not installed / not visible"
+            } catch (e: Throwable) {
+                "error: ${e.javaClass.simpleName}: ${e.message}"
+            }
+            appendLine("$pkg: $info")
+        }
+        appendLine("Mapped status: ${status()}")
+        step("checkStatus") {
+            when (val raw = model.checkStatus()) {
+                FeatureStatus.UNAVAILABLE -> "UNAVAILABLE ($raw)"
+                FeatureStatus.DOWNLOADABLE -> "DOWNLOADABLE ($raw)"
+                FeatureStatus.DOWNLOADING -> "DOWNLOADING ($raw)"
+                FeatureStatus.AVAILABLE -> "AVAILABLE ($raw)"
+                else -> "unknown ($raw)"
+            }
+        }
+        step("baseModelName") { model.getBaseModelName() }
+        step("availableFeatures") { model.getAvailableFeatures().toString() }
+        step("tokenLimit") { model.getTokenLimit().toString() }
+    }.trimEnd()
+
+    private suspend fun StringBuilder.step(name: String, block: suspend () -> String) {
+        val result = try { block() } catch (e: Throwable) { describe(e) }
+        appendLine("$name: $result")
+    }
+
+    private fun describe(e: Throwable): String = buildString {
+        append("THREW ${e.javaClass.name}: ${e.message}")
+        if (e is GenAiException) append(" [errorCode=${errorName(e.errorCode)}, aiCoreErrorCode=${e.aiCoreErrorCode}, aiCoreErrorType=${e.aiCoreErrorType}]")
+        var cause = e.cause
+        while (cause != null && cause !== cause.cause) {
+            append("\n  caused by ${cause.javaClass.name}: ${cause.message}")
+            cause = cause.cause
+        }
+    }
+
+    private fun errorName(code: Int) = when (code) {
+        GenAiException.ErrorCode.UNKNOWN -> "UNKNOWN"
+        GenAiException.ErrorCode.NOT_AVAILABLE -> "NOT_AVAILABLE"
+        GenAiException.ErrorCode.BUSY -> "BUSY"
+        GenAiException.ErrorCode.NOT_SUPPORTED -> "NOT_SUPPORTED"
+        GenAiException.ErrorCode.BACKGROUND_USE_BLOCKED -> "BACKGROUND_USE_BLOCKED"
+        GenAiException.ErrorCode.NOT_ENOUGH_DISK_SPACE -> "NOT_ENOUGH_DISK_SPACE"
+        GenAiException.ErrorCode.NEEDS_SYSTEM_UPDATE -> "NEEDS_SYSTEM_UPDATE"
+        GenAiException.ErrorCode.AICORE_INCOMPATIBLE -> "AICORE_INCOMPATIBLE"
+        else -> "code $code"
+    } + " ($code)"
 
     override fun write(prompt: String): Flow<LocalAi.Step> = flow {
         if (status() != LocalAi.Status.AVAILABLE) {
