@@ -99,11 +99,17 @@ class GeminiNano : LocalAi {
     private fun describe(e: Throwable): String = buildString {
         append("THREW ${e.javaClass.name}: ${e.message}")
         if (e is GenAiException) append(" [errorCode=${errorName(e.errorCode)}, aiCoreErrorCode=${e.aiCoreErrorCode}, aiCoreErrorType=${e.aiCoreErrorType}]")
+        frames(e)
         var cause = e.cause
         while (cause != null && cause !== cause.cause) {
             append("\n  caused by ${cause.javaClass.name}: ${cause.message}")
+            frames(cause)
             cause = cause.cause
         }
+    }
+
+    private fun StringBuilder.frames(t: Throwable) {
+        t.stackTrace.take(12).forEach { append("\n    at $it") }
     }
 
     private fun errorName(code: Int) = when (code) {
