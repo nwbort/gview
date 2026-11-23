@@ -3,6 +3,11 @@ package com.nwbort.gview.ai
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Generation
+import com.google.mlkit.genai.prompt.GenerativeModel
+import com.google.mlkit.genai.prompt.ModelConfig
+import com.google.mlkit.genai.prompt.ModelPreference
+import com.google.mlkit.genai.prompt.ModelReleaseStage
+import com.google.mlkit.genai.prompt.generationConfig
 import com.google.mlkit.genai.prompt.TextPart
 import com.google.mlkit.genai.prompt.generateContentRequest
 import kotlinx.coroutines.flow.Flow
@@ -36,20 +41,47 @@ interface LocalAi {
 
 /**
  * Gemini Nano through ML Kit's Prompt API, which talks to Android's AICore.
- * Pixel 8 and later, Galaxy S24 and later and a few others have it.
+ * Google lists Pixel 9 and later and some recent Galaxy and other phones. Others, like a
+ * Pixel 8 Pro, can run a preview model once AICore's Developer Preview is turned on.
  */
 class GeminiNano : LocalAi {
-    // Made on first use, so a phone without AICore never touches it beyond the status check.
-    private val model by lazy { Generation.getClient() }
+    // Made on first use, so a phone without AICore never touches them beyond the status check.
+    // The stable model first, then the preview ones.
+    private val candidates by lazy {
+        listOf(
+            Generation.getClient(),
+            preview(ModelPreference.FAST),
+            preview(ModelPreference.FULL),
+        )
+    }
+    private var chosen: GenerativeModel? = null
+    private val model: GenerativeModel get() = chosen ?: candidates.first()
 
-    override suspend fun status(): LocalAi.Status = try {
-        when (model.checkStatus()) {
+    private fun preview(pref: Int) = Generation.getClient(generationConfig {
+        modelConfig = ModelConfig.builder().apply {
+            releaseStage = ModelReleaseStage.PREVIEW
+            preference = pref
+        }.build()
+    })
+
+    private suspend fun statusOf(m: GenerativeModel) = try {
+        when (m.checkStatus()) {
             FeatureStatus.AVAILABLE -> LocalAi.Status.AVAILABLE
             FeatureStatus.DOWNLOADABLE, FeatureStatus.DOWNLOADING -> LocalAi.Status.DOWNLOADABLE
             else -> LocalAi.Status.UNAVAILABLE
         }
     } catch (e: Throwable) {
         LocalAi.Status.UNAVAILABLE
+    }
+
+    /** The first model this phone offers, preferring one that's already downloaded. */
+    override suspend fun status(): LocalAi.Status {
+        val found = try { candidates.map { it to statusOf(it) } } catch (e: Throwable) { return LocalAi.Status.UNAVAILABLE }
+        val best = found.firstOrNull { it.second == LocalAi.Status.AVAILABLE }
+            ?: found.firstOrNull { it.second == LocalAi.Status.DOWNLOADABLE }
+            ?: return LocalAi.Status.UNAVAILABLE
+        chosen = best.first
+        return best.second
     }
 
     override fun write(prompt: String): Flow<LocalAi.Step> = flow {

@@ -173,6 +173,11 @@ private fun AiSummary(a: Activity, track: Track?, trackReady: Boolean, vm: AppVi
     val summary = summaries[a.id]
     // Wait for the file so the splits and drift make it into the prompt.
     val write = { if (trackReady) vm.summarise(a, track) }
+    // Once the model is on the phone, start straight away rather than waiting for a tap.
+    // Not before: the first run downloads the model, which is the user's call.
+    androidx.compose.runtime.LaunchedEffect(a.id, trackReady, status) {
+        if (summary == null && status == LocalAi.Status.AVAILABLE) write()
+    }
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label("Summary", color, Modifier.weight(1f))

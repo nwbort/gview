@@ -38,6 +38,7 @@ class Store(context: Context) {
     private val cacheFile = File(dir, "cache.json")
     private val accountFile = File(context.noBackupFilesDir, "account.json")
     private val tracksDir = File(dir, "tracks").apply { mkdirs() }
+    private val summariesFile = File(dir, "summaries.json")
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val mutex = Mutex()
 
@@ -46,6 +47,10 @@ class Store(context: Context) {
 
     private val _account = MutableStateFlow(read(accountFile) ?: Account())
     val account: StateFlow<Account> = _account.asStateFlow()
+
+    private val _summaries = MutableStateFlow(read<Map<Long, String>>(summariesFile) ?: emptyMap())
+    /** On-device AI summaries, by activity id: each is written once and kept. */
+    val summaries: StateFlow<Map<Long, String>> = _summaries.asStateFlow()
 
     private inline fun <reified T> read(f: File): T? = runCatching { json.decodeFromString<T>(f.readText()) }.getOrNull()
 
@@ -73,14 +78,22 @@ class Store(context: Context) {
 
     suspend fun saveTrack(id: Long, track: Track) = withContext(Dispatchers.IO) { write(File(tracksDir, "$id.json"), track) }
 
+    suspend fun saveSummary(id: Long, text: String) = mutex.withLock {
+        val next = _summaries.value + (id to text)
+        _summaries.value = next
+        withContext(Dispatchers.IO) { write(summariesFile, next) }
+    }
+
     /** Forget everything: the key and all synced data. */
     suspend fun clear() = mutex.withLock {
         withContext(Dispatchers.IO) {
             cacheFile.delete()
             accountFile.delete()
+            summariesFile.delete()
             tracksDir.listFiles()?.forEach { it.delete() }
         }
         _cache.value = Cache()
         _account.value = Account()
+        _summaries.value = emptyMap()
     }
 }
