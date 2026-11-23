@@ -102,7 +102,6 @@ fun ActivityScreen(a: Activity, vm: AppViewModel, onBack: () -> Unit, onMap: () 
                 }
                 Hero(a)
                 Details(a)
-                AiDebug(vm)
                 AiSummary(a, track, state is TrackState.Ready, vm)
                 ActivityZones(a, cache.hrZones)
                 ActivityBests(a, cache)
@@ -174,6 +173,11 @@ private fun AiSummary(a: Activity, track: Track?, trackReady: Boolean, vm: AppVi
     val summary = summaries[a.id]
     // Wait for the file so the splits and drift make it into the prompt.
     val write = { if (trackReady) vm.summarise(a, track) }
+    // Once the model is on the phone, start straight away rather than waiting for a tap.
+    // Not before: the first run downloads the model, which is the user's call.
+    androidx.compose.runtime.LaunchedEffect(a.id, trackReady, status) {
+        if (summary == null && status == LocalAi.Status.AVAILABLE) write()
+    }
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Label("Summary", color, Modifier.weight(1f))
@@ -207,25 +211,6 @@ private fun AiSummary(a: Activity, track: Track?, trackReady: Boolean, vm: AppVi
                 Text(summary.message, style = MaterialTheme.typography.bodySmall, color = G.ink2)
                 AiButton("Try again", trackReady, write)
             }
-        }
-    }
-}
-
-/** TEMPORARY: what AICore said, to work out why the summary card is missing on a phone that should have it. */
-@Composable
-private fun AiDebug(vm: AppViewModel) {
-    val debug by vm.aiDebug.collectAsStateWithLifecycle()
-    val text = debug?.takeIf { it.isNotBlank() } ?: return
-    val clipboard = LocalContext.current.getSystemService(android.content.ClipboardManager::class.java)
-    Panel {
-        Label("On-device AI debug", G.ink2)
-        Spacer(Modifier.height(8.dp))
-        androidx.compose.foundation.text.selection.SelectionContainer {
-            Text(text, style = MaterialTheme.typography.bodySmall, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = G.ink2)
-        }
-        Row {
-            TextButton(onClick = { vm.checkAi() }) { Text("Check again", color = G.ink) }
-            TextButton(onClick = { clipboard?.setPrimaryClip(android.content.ClipData.newPlainText("AI debug", text)) }) { Text("Copy", color = G.ink) }
         }
     }
 }

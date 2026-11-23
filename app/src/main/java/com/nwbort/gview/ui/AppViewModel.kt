@@ -85,27 +85,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Whether this phone can write summaries on device; null until checked. */
     val aiStatus: StateFlow<LocalAi.Status?> = _aiStatus.asStateFlow()
 
-    private val _aiDebug = MutableStateFlow<String?>(null)
-    /** TEMPORARY: why the on-device model is or isn't there, shown on the activity page. */
-    val aiDebug: StateFlow<String?> = _aiDebug.asStateFlow()
-
     init {
-        checkAi()
+        viewModelScope.launch { _aiStatus.value = Graph.ai.status() }
     }
 
-    fun checkAi() {
-        viewModelScope.launch {
-            _aiDebug.value = "Checking…"
-            _aiStatus.value = Graph.ai.status()
-            _aiDebug.value = try { Graph.ai.diagnose(getApplication()) } catch (e: Throwable) { "diagnose threw ${e.javaClass.name}: ${e.message}" }
-        }
-    }
-
-    private val _summaries = MutableStateFlow<Map<Long, Summary>>(emptyMap())
-    /** Summaries written this session, by activity id: they're kept while the app is open. */
+    // Saved summaries come back as Done; ones being written live only here.
+    private val _summaries = MutableStateFlow<Map<Long, Summary>>(Graph.store.summaries.value.mapValues { Summary.Done(it.value) })
+    /** Summaries by activity id: saved ones, and any being written now. */
     val summaries = _summaries.asStateFlow()
 
-    /** Writes an on-device summary of [a]. It carries on if the page is left. */
+    /**
+     * Writes an on-device summary of [a] and saves it. It carries on if the page is left,
+     * but only while the app is open: AICore refuses to run for apps in the background.
+     */
     fun summarise(a: Activity, track: Track?) {
         if (_summaries.value[a.id].let { it is Summary.Downloading || it is Summary.Writing }) return
         val set = { s: Summary -> _summaries.update { it + (a.id to s) } }
@@ -119,7 +111,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         is LocalAi.Step.Text -> { text = step.text; set(Summary.Writing(text.trim())) }
                     }
                 }
-                set(if (text.isBlank()) Summary.Failed("The model didn't write anything. Try again.") else Summary.Done(text.trim()))
+                if (text.isBlank()) set(Summary.Failed("The model didn't write anything. Try again."))
+                else {
+                    set(Summary.Done(text.trim()))
+                    Graph.store.saveSummary(a.id, text.trim())
+                }
                 _aiStatus.value = LocalAi.Status.AVAILABLE
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
