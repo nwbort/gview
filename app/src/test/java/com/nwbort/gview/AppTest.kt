@@ -36,6 +36,7 @@ import com.nwbort.gview.ui.theme.G
 class TestApp : Application() {
     override fun onCreate() {
         Graph.api = FakeGarmin()
+        Graph.ai = FakeAi()
         super.onCreate()
         Graph.init(this)
         Graph.tiles.online = false
@@ -100,6 +101,13 @@ class AppTest {
         compose.waitUntil(20_000) { compose.onAllNodesWithContentDescription("Route map").fetchSemanticsNodes().isNotEmpty() }
         waitForText("Avg heart rate")
         shot("08-activity")
+        // The on-device summary: offered, then written in place.
+        scrollTo("Summarise this workout")
+        shot("08c-activity-summary-offer")
+        compose.onNodeWithText("Summarise this workout").performClick()
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("Rewrite").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue((Graph.ai as FakeAi).prompts.last().contains("Splits: km 1"))
+        shot("08d-activity-summary")
         scrollTo("SPLITS")
         shot("09-activity-splits")
 
